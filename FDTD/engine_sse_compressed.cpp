@@ -16,6 +16,14 @@
 */
 
 #include "engine_sse_compressed.h"
+
+// GCC's emmintrin.h supports AltiVec for ppc64le
+#include <boost/predef.h>
+#if defined(BOOST_ARCH_PPC_64) && defined(BOOST_ENDIAN_LITTLE_BYTE)
+#define NO_WARN_X86_INTRINSICS
+#include <emmintrin.h>
+#endif
+
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
