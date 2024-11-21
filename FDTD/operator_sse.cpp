@@ -82,10 +82,19 @@ void Operator_sse::InitOperator()
 	delete f4_vi_ptr;
 	delete f4_iv_ptr;
 	delete f4_ii_ptr;
-	f4_vv_ptr = new ArrayLib::ArrayNIJK<f4vector>("f4_vv", numLines);
-	f4_vi_ptr = new ArrayLib::ArrayNIJK<f4vector>("f4_vi", numLines);
-	f4_iv_ptr = new ArrayLib::ArrayNIJK<f4vector>("f4_iv", numLines);
-	f4_ii_ptr = new ArrayLib::ArrayNIJK<f4vector>("f4_ii", numLines);
 
 	numVectors =  ceil((double)numLines[2]/4.0);
+
+	f4_vv_ptr = new ArrayLib::ArrayNIJK<f4vector>(
+		"f4_vv", {numLines[0], numLines[1], numVectors}
+	);
+	f4_vi_ptr = new ArrayLib::ArrayNIJK<f4vector>(
+		"f4_vi", {numLines[0], numLines[1], numVectors}
+	);
+	f4_iv_ptr = new ArrayLib::ArrayNIJK<f4vector>(
+		"f4_iv", {numLines[0], numLines[1], numVectors}
+	);
+	f4_ii_ptr = new ArrayLib::ArrayNIJK<f4vector>(
+		"f4_ii", {numLines[0], numLines[1], numVectors}
+	);
 }

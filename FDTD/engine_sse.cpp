@@ -56,8 +56,12 @@ void Engine_sse::Init()
 	delete curr_ptr;
 	curr_ptr = NULL;
 
-	f4_volt_ptr = new ArrayLib::ArrayNIJK<f4vector>("f4_volt", numLines);
-	f4_curr_ptr = new ArrayLib::ArrayNIJK<f4vector>("f4_curr", numLines);
+	f4_volt_ptr = new ArrayLib::ArrayNIJK<f4vector>(
+		"f4_volt", {numLines[0], numLines[1], numVectors}
+	);
+	f4_curr_ptr = new ArrayLib::ArrayNIJK<f4vector>(
+		"f4_curr", {numLines[0], numLines[1], numVectors}
+	);
 }
 
 void Engine_sse::Reset()
