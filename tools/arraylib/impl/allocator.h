@@ -2,6 +2,7 @@
 #define ARRAYLIB_ALLOCATOR_H
 
 #include <cstddef>
+#include <cmath>
 
 namespace ArrayLib
 {
@@ -48,10 +49,15 @@ class ArrayLib::AlignedAllocator
 public:
 	static T* alloc(size_t numelem)
 	{
-		// Align to 1 MiB, a common hugepage size on many systems.
-		// It allows us to enable hugepage in the future. It's also
-		// a (large) multiple of all SIMD data types.
-		constexpr size_t alignment = 1 * 1024 * 1024;
+		size_t alignment;
+		// User-defined SIMD variables can be larger than the built-in C
+		// types, so they need custom alignments to their own size.
+		if (sizeof(T) <= sizeof(void*))
+			// POSIX says alignment >= sizeof(void*)
+			alignment = sizeof(void *);
+		else
+			// POSIX says alignment must be a power of 2
+			alignment = 1 << (size_t) ceil(log2(sizeof(T)));
 
 		T* buf;
 #ifdef WIN32
