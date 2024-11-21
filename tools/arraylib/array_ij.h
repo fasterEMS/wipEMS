@@ -34,7 +34,7 @@ public:
 	void Init(std::string name, std::array<IndexType, 2> extent)
 	{
 		if (this->m_ptr != NULL)
-			Base::AllocatorType::free(this->m_ptr);
+			Base::AllocatorType::free(this->m_ptr, this->m_size);
 
 		this->m_name = name;
 		this->m_size = extent[0] * extent[1];
@@ -73,7 +73,7 @@ public:
 
 	~ArrayIJ()
 	{
-		Base::AllocatorType::free(this->m_ptr);
+		Base::AllocatorType::free(this->m_ptr, this->m_size);
 	}
 };
 

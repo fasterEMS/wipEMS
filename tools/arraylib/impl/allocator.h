@@ -19,23 +19,12 @@ class ArrayLib::SimpleAllocator
 public:
 	static T* alloc(size_t numelem)
 	{
-		T* buf = malloc(numelem * sizeof(T));
-		if (buf == NULL)
-		{
-			std::cerr << "Failed to allocate aligned memory" << std::endl;
-			throw std::bad_alloc();
-		}
-		memset(buf, 0, numelem * sizeof(T));
-		return new (buf) T[numelem];
+		T* ptr = new T[numelem]();
 	}
 
-	static void free(T* ptr)
+	static void free(T* ptr, size_t numelem)
 	{
-		if (ptr)
-		{
-			ptr->~T();
-			free(ptr);
-		}
+		delete[] ptr;
 	}
 };
 
@@ -76,19 +65,22 @@ public:
 		}
 #endif
 		memset(buf, 0, numelem * sizeof(T));
-		return new (buf) T[numelem];
+		for (size_t i = 0; i < numelem; i++)
+			new (buf + i) T();
 
+		return buf;
 	}
 
-	static void free(T* ptr)
+	static void free(T* ptr, size_t numelem)
 	{
 		if (ptr)
 		{
-			ptr->~T();
+			for (size_t i = 0; i < numelem; i++)
+				(&ptr[i])->~T();
 #ifdef WIN32
 			_mm_free(ptr);
 #else
-			free(ptr);
+			std::free(ptr);
 #endif
 		}
 
