@@ -61,6 +61,9 @@ if(UNIX AND ENABLE_RPATH)
   set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 endif()
 
+# Set locations of extra CMake modules
+SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${openEMS_SOURCE_DIR}/cmake/Modules/")
+
 if (WITH_MPI)
 	ADD_DEFINITIONS(-DMPI_SUPPORT)
 	# Require MPI for this project:
@@ -70,8 +73,11 @@ if (WITH_MPI)
 	message(STATUS "Found MPI. INCLUDE " ${MPI_INCLUDE_PATH})
 endif()
 
-# Set locations of extra CMake modules
-SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${openEMS_SOURCE_DIR}/cmake/Modules/")
+if (WITH_TILING)
+	find_package(Hwloc REQUIRED)
+	find_package(TBB REQUIRED)
+	set(TBB_LIBRARIES "tbb")
+endif()
 
 # fparser
 # $ cmake -D FPARSER_ROOT_DIR=~/opt/openEMS .
@@ -185,6 +191,8 @@ TARGET_LINK_LIBRARIES( openEMS
   ${Boost_LIBRARIES}
   ${vtk_LIBS}
   ${MPI_LIBRARIES}
+  ${Hwloc_LIBRARIES}
+  ${TBB_LIBRARIES}
 )
 
 if (WIN32)
