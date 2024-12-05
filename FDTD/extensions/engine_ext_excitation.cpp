@@ -23,6 +23,7 @@ Engine_Ext_Excitation::Engine_Ext_Excitation(Operator_Ext_Excitation* op_ext) : 
 {
 	m_Op_Exc = op_ext;
 	m_Priority = ENG_EXT_PRIO_EXCITATION;
+	m_TilingSupported = true;
 }
 
 Engine_Ext_Excitation::~Engine_Ext_Excitation()
@@ -30,14 +31,17 @@ Engine_Ext_Excitation::~Engine_Ext_Excitation()
 
 }
 
-template <typename EngineType>
-void Engine_Ext_Excitation::Apply2VoltagesImpl(EngineType* eng)
+template <typename EngineType, bool tiling>
+void Engine_Ext_Excitation::Apply2VoltagesImpl(
+	EngineType *eng,
+	int numTS,
+	Tiling::Range3D<> range
+)
 {
 	//soft voltage excitation here (E-field excite)
 	int exc_pos;
 	unsigned int ny;
 	unsigned int pos[3];
-	int numTS = m_Eng->GetNumberOfTimesteps();
 	unsigned int length = m_Op_Exc->m_Exc->GetLength();
 	FDTD_FLOAT* exc_volt =  m_Op_Exc->m_Exc->GetVoltageSignal();
 
@@ -47,31 +51,55 @@ void Engine_Ext_Excitation::Apply2VoltagesImpl(EngineType* eng)
 
 	for (unsigned int n=0; n<m_Op_Exc->Volt_Count; ++n)
 	{
+		pos[0] = m_Op_Exc->Volt_index[0][n];
+		pos[1] = m_Op_Exc->Volt_index[1][n];
+		pos[2] = m_Op_Exc->Volt_index[2][n];
+
+		// "tiling" is a templated Boolean constant, there's no runtime
+		// branching for non-tiling engines
+		if (tiling && !InsideTile(range, pos))
+			continue;
+
 		exc_pos = numTS - (int)m_Op_Exc->Volt_delay[n];
 		exc_pos *= (exc_pos>0);
 		exc_pos %= p;
 		exc_pos *= (exc_pos<(int)length);
 		ny = m_Op_Exc->Volt_dir[n];
-		pos[0]=m_Op_Exc->Volt_index[0][n];
-		pos[1]=m_Op_Exc->Volt_index[1][n];
-		pos[2]=m_Op_Exc->Volt_index[2][n];
 		eng->EngineType::SetVolt(ny,pos, eng->EngineType::GetVolt(ny,pos) + m_Op_Exc->Volt_amp[n]*exc_volt[exc_pos]);
 	}
 }
 
+// Used for Basic, SSE, and SSE_Compressed engines.
 void Engine_Ext_Excitation::Apply2Voltages()
 {
-	ENG_DISPATCH(Apply2VoltagesImpl);
+	ENG_DISPATCH_ARGS(
+		Apply2VoltagesImpl,
+		m_Eng->GetNumberOfTimesteps(),
+		Tiling::Range3D<>()  // dummy value
+	);
 }
 
-template <typename EngineType>
-void Engine_Ext_Excitation::Apply2CurrentImpl(EngineType* eng)
+// Only used by Tiling engine.
+void Engine_Ext_Excitation::Apply2Voltages(int timestep, Tiling::Range3D<> range)
+{
+	Apply2VoltagesImpl<Engine_Tiling, true>(
+		(Engine_Tiling*) m_Eng,
+		timestep,
+		range
+	);
+}
+
+template <typename EngineType, bool tiling>
+void Engine_Ext_Excitation::Apply2CurrentImpl(
+	EngineType *eng,
+	int numTS,
+	Tiling::Range3D<> range
+)
 {
 	//soft current excitation here (H-field excite)
 	int exc_pos;
 	unsigned int ny;
 	unsigned int pos[3];
-	int numTS = m_Eng->GetNumberOfTimesteps();
 	unsigned int length = m_Op_Exc->m_Exc->GetLength();
 	FDTD_FLOAT* exc_curr =  m_Op_Exc->m_Exc->GetCurrentSignal();
 
@@ -81,19 +109,61 @@ void Engine_Ext_Excitation::Apply2CurrentImpl(EngineType* eng)
 
 	for (unsigned int n=0; n<m_Op_Exc->Curr_Count; ++n)
 	{
+		pos[0] = m_Op_Exc->Curr_index[0][n];
+		pos[1] = m_Op_Exc->Curr_index[1][n];
+		pos[2] = m_Op_Exc->Curr_index[2][n];
+
+		// "tiling" is a templated Boolean constant, there's no runtime
+		// branching for non-tiling engines
+		if (tiling && !InsideTile(range, pos))
+			continue;
+
 		exc_pos = numTS - (int)m_Op_Exc->Curr_delay[n];
 		exc_pos *= (exc_pos>0);
 		exc_pos %= p;
 		exc_pos *= (exc_pos<(int)length);
 		ny = m_Op_Exc->Curr_dir[n];
-		pos[0]=m_Op_Exc->Curr_index[0][n];
-		pos[1]=m_Op_Exc->Curr_index[1][n];
-		pos[2]=m_Op_Exc->Curr_index[2][n];
 		eng->EngineType::SetCurr(ny,pos, eng->EngineType::GetCurr(ny,pos) + m_Op_Exc->Curr_amp[n]*exc_curr[exc_pos]);
 	}
 }
 
+// Used for Basic, SSE, and SSE_Compressed engines.
 void Engine_Ext_Excitation::Apply2Current()
 {
-	ENG_DISPATCH(Apply2CurrentImpl);
+	ENG_DISPATCH_ARGS(
+		Apply2CurrentImpl,
+		m_Eng->GetNumberOfTimesteps(),
+		Tiling::Range3D<>()  // dummy value
+	);
+}
+
+// Only used by Tiling engine.
+void Engine_Ext_Excitation::Apply2Current(int timestep, Tiling::Range3D<> range)
+{
+	Apply2CurrentImpl<Engine_Tiling, true>(
+		(Engine_Tiling*) m_Eng,
+		timestep,
+		range
+	);
+}
+
+// Whether the excited cell is inside the tile that is currently
+// being processed.
+//
+// TODO: It checks every excited cell and is inefficient. It's
+// better to pre-determine all cells involved before simulation
+// in InitializeTiling(). But it works for now since most simulations
+// only have tiny ports.
+bool Engine_Ext_Excitation::InsideTile(
+	Tiling::Range3D<> range,
+	unsigned int exc[3]
+)
+{
+	for (unsigned int n = 0; n < 3; n++)
+	{
+		if (exc[n] < range.first[n] || exc[n] > range.last[n])
+			return false;
+	}
+
+	return true;
 }
