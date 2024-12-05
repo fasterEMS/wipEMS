@@ -58,12 +58,13 @@ Engine_Ext_Mur_ABC::Engine_Ext_Mur_ABC(Operator_Ext_Mur_ABC* op_ext) :
 	}
 
 	SetNumberOfThreads(1);
+
+	m_TilingSupported = true;
 }
 
 Engine_Ext_Mur_ABC::~Engine_Ext_Mur_ABC()
 {
 }
-
 
 void Engine_Ext_Mur_ABC::SetNumberOfThreads(int nrThread)
 {
@@ -76,25 +77,94 @@ void Engine_Ext_Mur_ABC::SetNumberOfThreads(int nrThread)
 		m_start.at(n) = m_start.at(n-1) + m_numX.at(n-1);
 }
 
-
-template <typename EngineType>
-void Engine_Ext_Mur_ABC::DoPreVoltageUpdatesImpl(EngineType* eng, int threadID)
+void Engine_Ext_Mur_ABC::InitializeTiling(const Tiling::Plan3D& plan)
 {
-	if (IsActive()==false) return;
-	if (m_Eng==NULL) return;
-	if (threadID>=m_NrThreads)
-		return;
+	for (const Tiling::TileList3D& stage : plan)
+	{
+		for (const Tiling::Tile3D& tile : stage)
+		{
+			for (const Tiling::Subtile3D& subtile : tile)
+			{
+				for (const Tiling::Range3D<>& range : subtile)
+				{
+					InitializeTilingImpl(range);
+				}
+			}
+		}
+	}
+}
+
+// Before simulation starts, Engine_Tiling tells us how the space is
+// partitioned into ranges of tiles via a data structure called "Plan".
+// Here we check all ranges in the plan if this range overlaps with
+// the range controlled by us, we mark the range as "true" in the hash
+// table m_needRun, otherwise it's marked False. It allows us to quickly
+// skip irrelevant tiles without range comparisons.
+void Engine_Ext_Mur_ABC::InitializeTilingImpl(Tiling::Range3D<> range)
+{
 	unsigned int pos[] = {0,0,0};
 	unsigned int pos_shift[] = {0,0,0};
 	pos[m_ny] = m_LineNr;
 	pos_shift[m_ny] = m_LineNr_Shift;
 
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (unsigned int lineX = 0; lineX < m_numLines[0]; ++lineX)
 	{
-		pos[m_nyP]=lineX+m_start.at(threadID);
+		pos[m_nyP]=lineX;
 		pos_shift[m_nyP] = pos[m_nyP];
-		for (pos[m_nyPP]=0; pos[m_nyPP]<m_numLines[1]; ++pos[m_nyPP])
+		for (pos[m_nyPP] = 0; pos[m_nyPP] < m_numLines[1]; ++pos[m_nyPP])
 		{
+			if (InsideTile(range, pos) && InsideTile(range, pos_shift))
+				// Mur ABC cells (controlled by us) is in this tile
+				m_needRun[range] = true;
+			else if (!InsideTile(range, pos) && !InsideTile(range, pos_shift))
+				// Mur ABC cells is NOT in this tile
+				m_needRun[range] = false;
+			else
+				// Mur ABC cells is only partially in this tile
+				throw std::runtime_error(
+					"Unsupported tiling partitioning for Mur ABC detected!"
+				);
+		}
+	}
+}
+
+bool Engine_Ext_Mur_ABC::InsideTile(
+	Tiling::Range3D<> range,
+	unsigned int target[3]
+)
+{
+	for (unsigned int n = 0; n < 3; n++)
+	{
+		if (target[n] < range.first[n] || target[n] > range.last[n])
+			return false;
+	}
+
+	return true;
+}
+
+template <typename EngineType, bool tiling>
+void Engine_Ext_Mur_ABC::DoPreVoltageUpdatesImpl(
+	EngineType* eng,
+	Tiling::Range2D<> abcRange,
+	Tiling::Range3D<> tileRange
+)
+{
+	if (IsActive()==false) return;
+	if (m_Eng==NULL) return;
+	unsigned int pos[] = {0,0,0};
+	unsigned int pos_shift[] = {0,0,0};
+	pos[m_ny] = m_LineNr;
+	pos_shift[m_ny] = m_LineNr_Shift;
+
+	for (unsigned int lineX = abcRange.first[0]; lineX <= abcRange.last[0]; ++lineX)
+	{
+		pos[m_nyP]=lineX;
+		pos_shift[m_nyP] = pos[m_nyP];
+		for (pos[m_nyPP] = abcRange.first[1]; pos[m_nyPP] <= abcRange.last[1]; ++pos[m_nyPP])
+		{
+			if (tiling && !InsideTile(tileRange, pos) && !InsideTile(tileRange, pos_shift))
+				continue;
+
 			pos_shift[m_nyPP] = pos[m_nyPP];
 			m_volt_nyP[pos[m_nyP]][pos[m_nyPP]] = eng->EngineType::GetVolt(m_nyP,pos_shift) - m_Op_mur->m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyP,pos);
 			m_volt_nyPP[pos[m_nyP]][pos[m_nyPP]] = eng->EngineType::GetVolt(m_nyPP,pos_shift) - m_Op_mur->m_Mur_Coeff_nyPP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyPP,pos);
@@ -102,29 +172,65 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdatesImpl(EngineType* eng, int threadID)
 	}
 }
 
+// Used for Basic, SSE, and SSE_Compressed engines.
 void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int threadID)
 {
-	ENG_DISPATCH_ARGS(DoPreVoltageUpdatesImpl, threadID);
+	if (threadID>=m_NrThreads)
+		return;
+
+	Tiling::Range2D<> abcRange;
+	abcRange.first = {m_start.at(threadID), 0};
+	abcRange.last =
+	{
+		m_start.at(threadID) + m_numX.at(threadID) - 1,
+		m_numLines[1] - 1,
+	};
+
+	ENG_DISPATCH_ARGS(
+		DoPreVoltageUpdatesImpl,
+		abcRange,
+		Tiling::Range3D<>()  // dummy value
+	);
 }
 
-template <typename EngineType>
-void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(EngineType* eng, int threadID)
+// Only used by Tiling engine.
+void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> tileRange)
+{
+	Tiling::Range2D<> abcRange;
+	abcRange.first = {0, 0};
+	abcRange.last = {m_numLines[0], m_numLines[1] - 1};
+
+	if (m_needRun[tileRange])
+	{
+		DoPreVoltageUpdatesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, abcRange, tileRange
+		);
+	}
+}
+
+template <typename EngineType, bool tiling>
+void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(
+	EngineType* eng,
+	Tiling::Range2D<> abcRange,  // nyP, nyPP
+	Tiling::Range3D<> tileRange
+)
 {
 	if (IsActive()==false) return;
 	if (m_Eng==NULL) return;
-	if (threadID>=m_NrThreads)
-		return;
 	unsigned int pos[] = {0,0,0};
 	unsigned int pos_shift[] = {0,0,0};
 	pos[m_ny] = m_LineNr;
 	pos_shift[m_ny] = m_LineNr_Shift;
 
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (unsigned int lineX = abcRange.first[0]; lineX <= abcRange.last[0]; ++lineX)
 	{
-		pos[m_nyP]=lineX+m_start.at(threadID);
+		pos[m_nyP]=lineX;
 		pos_shift[m_nyP] = pos[m_nyP];
-		for (pos[m_nyPP]=0; pos[m_nyPP]<m_numLines[1]; ++pos[m_nyPP])
+		for (pos[m_nyPP] = abcRange.first[1]; pos[m_nyPP] <= abcRange.last[1]; ++pos[m_nyPP])
 		{
+			if (tiling && !InsideTile(tileRange, pos) && !InsideTile(tileRange, pos_shift))
+				continue;
+
 			pos_shift[m_nyPP] = pos[m_nyPP];
 			m_volt_nyP[pos[m_nyP]][pos[m_nyPP]] += m_Op_mur->m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyP,pos_shift);
 			m_volt_nyPP[pos[m_nyP]][pos[m_nyPP]] += m_Op_mur->m_Mur_Coeff_nyPP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyPP,pos_shift);
@@ -132,34 +238,100 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(EngineType* eng, int threadID)
 	}
 }
 
+// Used for Basic, SSE, and SSE_Compressed engines.
 void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int threadID)
 {
-	ENG_DISPATCH_ARGS(DoPostVoltageUpdatesImpl, threadID);
-}
-
-template <typename EngineType>
-void Engine_Ext_Mur_ABC::Apply2VoltagesImpl(EngineType* eng, int threadID)
-{
-	if (IsActive()==false) return;
 	if (threadID>=m_NrThreads)
 		return;
+
+	Tiling::Range2D<> abcRange;
+	abcRange.first = {m_start.at(threadID), 0};
+	abcRange.last =
+	{
+		m_start.at(threadID) + m_numX.at(threadID) - 1,
+		m_numLines[1] - 1,
+	};
+
+	ENG_DISPATCH_ARGS(
+		DoPostVoltageUpdatesImpl,
+		abcRange,
+		Tiling::Range3D<>()  // dummy value
+	);
+}
+
+// Only used by Tiling engine.
+void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int timestep, Tiling::Range3D<> tileRange)
+{
+	Tiling::Range2D<> abcRange;
+	abcRange.first = {0, 0};
+	abcRange.last = {m_numLines[0], m_numLines[1] - 1};
+
+	if (m_needRun[tileRange])
+	{
+		DoPostVoltageUpdatesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, abcRange, tileRange
+		);
+	}
+}
+
+template <typename EngineType, bool tiling>
+void Engine_Ext_Mur_ABC::Apply2VoltagesImpl(
+	EngineType* eng,
+	Tiling::Range2D<> abcRange,  // nyP, nyPP
+	Tiling::Range3D<> tileRange
+)
+{
+	if (IsActive()==false) return;
 	if (m_Eng==NULL) return;
 	unsigned int pos[] = {0,0,0};
 	pos[m_ny] = m_LineNr;
 
-	Engine_sse* eng_sse = (Engine_sse*) m_Eng;
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (unsigned int lineX = abcRange.first[0]; lineX <= abcRange.last[0]; ++lineX)
 	{
-		pos[m_nyP]=lineX+m_start.at(threadID);
-		for (pos[m_nyPP]=0; pos[m_nyPP]<m_numLines[1]; ++pos[m_nyPP])
+		pos[m_nyP]=lineX;
+		for (pos[m_nyPP] = abcRange.first[1]; pos[m_nyPP] <= abcRange.last[1]; ++pos[m_nyPP])
 		{
+			if (tiling && !InsideTile(tileRange, pos))
+				continue;
+
 			eng->EngineType::SetVolt(m_nyP,pos, m_volt_nyP[pos[m_nyP]][pos[m_nyPP]]);
 			eng->EngineType::SetVolt(m_nyPP,pos, m_volt_nyPP[pos[m_nyP]][pos[m_nyPP]]);
 		}
 	}
 }
 
+// Used for Basic, SSE, and SSE_Compressed engines.
 void Engine_Ext_Mur_ABC::Apply2Voltages(int threadID)
 {
-	ENG_DISPATCH_ARGS(Apply2VoltagesImpl, threadID);
+	if (threadID>=m_NrThreads)
+		return;
+
+	Tiling::Range2D<> abcRange;
+	abcRange.first = {m_start.at(threadID), 0};
+	abcRange.last =
+	{
+		m_start.at(threadID) + m_numX.at(threadID) - 1,
+		m_numLines[1] - 1,
+	};
+
+	ENG_DISPATCH_ARGS(
+		Apply2VoltagesImpl,
+		abcRange,
+		Tiling::Range3D<>()  // dummy value
+	);
+}
+
+// Only used by Tiling engine.
+void Engine_Ext_Mur_ABC::Apply2Voltages(int timestep, Tiling::Range3D<> tileRange)
+{
+	Tiling::Range2D<> abcRange;
+	abcRange.first = {0, 0};
+	abcRange.last = {m_numLines[0], m_numLines[1] - 1};
+
+	if (m_needRun[tileRange])
+	{
+		Apply2VoltagesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, abcRange, tileRange
+		);
+	}
 }
