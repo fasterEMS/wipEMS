@@ -23,6 +23,7 @@
 #include "FDTD/operator.h"
 #include "engine_extension_dispatcher.h"
 #include "tools/arraylib/array_ij.h"
+#include "tools/tiling/tiling.h"
 
 class Operator_Ext_Mur_ABC;
 
@@ -31,6 +32,8 @@ class Engine_Ext_Mur_ABC : public Engine_Extension
 public:
 	Engine_Ext_Mur_ABC(Operator_Ext_Mur_ABC* op_ext);
 	virtual ~Engine_Ext_Mur_ABC();
+
+	virtual void InitializeTiling(const Tiling::Plan3D& plan);
 
 	virtual void SetNumberOfThreads(int nrThread);
 
@@ -41,15 +44,33 @@ public:
 	virtual void Apply2Voltages() {Engine_Ext_Mur_ABC::Apply2Voltages(0);}
 	virtual void Apply2Voltages(int threadID);
 
+	virtual void DoPreVoltageUpdates(int timestep, Tiling::Range3D<> range);
+	virtual void DoPostVoltageUpdates(int timestep, Tiling::Range3D<> range);
+	virtual void Apply2Voltages(int timestep, Tiling::Range3D<> range);
+
 protected:
-	template <typename EngineType>
-	void DoPreVoltageUpdatesImpl(EngineType* eng, int threadID);
+	bool InsideTile(Tiling::Range3D<> range, unsigned int target[3]);
 
-	template <typename EngineType>
-	void DoPostVoltageUpdatesImpl(EngineType* eng, int threadID);
+	template <typename EngineType, bool tiling=false>
+	void DoPreVoltageUpdatesImpl(
+		EngineType* eng,
+		Tiling::Range2D<> abcRange,
+		Tiling::Range3D<> tileRange
+	);
 
-	template <typename EngineType>
-	void Apply2VoltagesImpl(EngineType* eng, int threadID);
+	template <typename EngineType, bool tiling=false>
+	void DoPostVoltageUpdatesImpl(
+		EngineType* eng,
+		Tiling::Range2D<> abcRange,
+		Tiling::Range3D<> tileRange
+	);
+
+	template <typename EngineType, bool tiling=false>
+	void Apply2VoltagesImpl(
+		EngineType* eng,
+		Tiling::Range2D<> abcRange,
+		Tiling::Range3D<> tileRange
+	);
 
 	Operator_Ext_Mur_ABC* m_Op_mur;
 
@@ -69,6 +90,13 @@ protected:
 	ArrayLib::ArrayIJ<FDTD_FLOAT>& m_Mur_Coeff_nyPP;
 	ArrayLib::ArrayIJ<FDTD_FLOAT> m_volt_nyP; //n+1 direction
 	ArrayLib::ArrayIJ<FDTD_FLOAT> m_volt_nyPP; //n+2 direction
+
+private:
+	void InitializeTilingImpl(Tiling::Range3D<> range);
+
+	std::unordered_map<
+		Tiling::Range3D<>, bool, Tiling::Range3DHasher<>
+	> m_needRun;
 };
 
 #endif // ENGINE_EXT_MUR_ABC_H
