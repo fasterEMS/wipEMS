@@ -169,6 +169,10 @@ ADD_SUBDIRECTORY( FDTD )
 ADD_SUBDIRECTORY( FDTD/extensions )
 ADD_SUBDIRECTORY( Common )
 
+if (WITH_TILING)
+  ADD_SUBDIRECTORY( tools/tiling )
+endif()
+
 INCLUDE_DIRECTORIES( ${openEMS_SOURCE_DIR} )    #find tools
 
 message(STATUS "Sources:"  ${SOURCES})
