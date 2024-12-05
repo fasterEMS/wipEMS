@@ -21,6 +21,7 @@
 
 #include "FDTD/engine.h"
 #include "FDTD/engine_sse.h"
+#include "FDTD/engine_tiling.h"
 
 // In openEMS, all extensions are subclasses from the abstract Engine_Extension
 // to implement features like Engine_Extension::Apply2Voltages(). When an
@@ -58,6 +59,9 @@
 #define ENG_DISPATCH(impl) \
 	switch (m_Eng->GetType()) \
 	{ \
+	case Engine::TILING_V1: \
+		(this)->template impl<Engine_Tiling>((Engine_Tiling*) m_Eng); \
+		break; \
 	case Engine::SSE: \
 		(this)->template impl<Engine_sse>((Engine_sse*) m_Eng); \
 		break; \
@@ -74,6 +78,9 @@
 #define ENG_DISPATCH_ARGS(impl, ...) \
 	switch (m_Eng->GetType()) \
 	{ \
+	case Engine::TILING_V1: \
+		(this)->template impl<Engine_Tiling>((Engine_Tiling*) m_Eng, __VA_ARGS__); \
+		break; \
 	case Engine::SSE: \
 		(this)->template impl<Engine_sse>((Engine_sse*) m_Eng, __VA_ARGS__); \
 		break; \
