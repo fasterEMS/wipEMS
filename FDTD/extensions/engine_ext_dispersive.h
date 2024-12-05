@@ -22,6 +22,8 @@
 #include "FDTD/engine.h"
 #include "FDTD/operator.h"
 #include "engine_extension_dispatcher.h"
+#include "tools/global.h"
+#include "tools/tiling/tiling.h"
 
 class Operator_Ext_Dispersive;
 
@@ -31,15 +33,18 @@ public:
 	Engine_Ext_Dispersive(Operator_Ext_Dispersive* op_ext_disp);
 	virtual ~Engine_Ext_Dispersive();
 
+	virtual void InitializeTiling(const Tiling::Plan3D& plan);
+
 	virtual void Apply2Voltages();
 	virtual void Apply2Current();
 
-protected:
-	template <typename EngineType>
-	void Apply2VoltagesImpl(EngineType* eng);
+	virtual void Apply2Voltages(int timestep, Tiling::Range3D<> range);
+	virtual void Apply2Current(int timestep, Tiling::Range3D<> range);
 
-	template <typename EngineType>
-	void Apply2CurrentImpl(EngineType* eng);
+protected:
+	bool InsideTile(
+		Tiling::Range3D<> range, unsigned int** target, unsigned int i
+	);
 
 	Operator_Ext_Dispersive* m_Op_Ext_Disp;
 
@@ -53,6 +58,31 @@ protected:
 	//! ADE voltages
 	// Array setup: volt_ADE[N_order][direction][mesh_pos]
 	FDTD_FLOAT ***volt_ADE;
+
+	template <typename EngineType>
+	void Apply2VoltagesImpl(
+		EngineType* eng,
+		std::array<unsigned int, 3> pos,
+		std::array<float, 3> volt_ADE
+	);
+
+	template <typename EngineType>
+	void Apply2CurrentImpl(
+		EngineType* eng,
+		std::array<unsigned int, 3> pos,
+		std::array<float, 3> curr_ADE
+	);
+
+private:
+	void InitializeTilingImpl(Tiling::Range3D<> range);
+
+	std::vector<
+		std::unordered_map<
+			Tiling::Range3D<>,
+			std::vector<std::array<unsigned int, 4>>,
+			Tiling::Range3DHasher<>
+		>
+	> m_cellmap;
 };
 
 #endif // ENGINE_EXT_DISPERSIVE_H
