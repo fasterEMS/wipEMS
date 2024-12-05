@@ -7,9 +7,17 @@ if (WITH_MPI)
      )
 endif()
 
+if (WITH_TILING)
+  set(TILING_SOURCES
+     ${CMAKE_CURRENT_SOURCE_DIR}/operator_tiling.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/engine_tiling.cpp
+     )
+endif()
+
 set(SOURCES
   ${SOURCES}
   ${MPI_SOURCES}
+  ${TILING_SOURCES}
   ${CMAKE_CURRENT_SOURCE_DIR}/engine.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/operator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/engine_multithread.cpp
