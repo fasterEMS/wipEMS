@@ -28,17 +28,15 @@ public:
 	Engine_Ext_LorentzMaterial(Operator_Ext_LorentzMaterial* op_ext_lorentz);
 	virtual ~Engine_Ext_LorentzMaterial();
 
-	virtual void DoPreVoltageUpdates();
+	virtual void InitializeTiling(const Tiling::Plan3D& plan);
 
+	virtual void DoPreVoltageUpdates();
 	virtual void DoPreCurrentUpdates();
 
+	virtual void DoPreVoltageUpdates(int timestep, Tiling::Range3D<> range);
+	virtual void DoPreCurrentUpdates(int timestep, Tiling::Range3D<> range);
+
 protected:
-	template <typename EngineType>
-	void DoPreVoltageUpdatesImpl(EngineType* eng);
-
-	template <typename EngineType>
-	void DoPreCurrentUpdatesImpl(EngineType* eng);
-
 	Operator_Ext_LorentzMaterial* m_Op_Ext_Lor;
 
 	//! ADE Lorentz voltages
@@ -49,6 +47,56 @@ protected:
 	// Array setup: curr_Lor_ADE[N_order][direction][mesh_pos]
 	FDTD_FLOAT ***curr_Lor_ADE;
 
+	template <typename EngineType>
+	void DoPreVoltageUpdatesImpl(
+		EngineType* eng,
+		std::array<unsigned int, 3> pos,
+		std::array<float, 3> v_Lor_ADE,
+		std::array<float, 3> v_int_ADE,
+		std::array<float, 3> v_ext_ADE,
+		std::array<float*, 3> volt_Lor_ADE,
+		std::array<float*, 3> volt_ADE
+	);
+
+	template <typename EngineType>
+	void DoPreVoltageUpdatesImpl(
+		EngineType* eng,
+		std::array<unsigned int, 3> pos,
+		std::array<float, 3> v_int_ADE,
+		std::array<float, 3> v_ext_ADE,
+		std::array<float*, 3> volt_ADE
+	);
+
+	template <typename EngineType>
+	void DoPreCurrentUpdatesImpl(
+		EngineType* eng,
+		std::array<unsigned int, 3> pos,
+		std::array<float, 3> i_Lor_ADE,
+		std::array<float, 3> i_int_ADE,
+		std::array<float, 3> i_ext_ADE,
+		std::array<float*, 3> curr_Lor_ADE,
+		std::array<float*, 3> curr_ADE
+	);
+
+	template <typename EngineType>
+	void DoPreCurrentUpdatesImpl(
+		EngineType* eng,
+		std::array<unsigned int, 3> pos,
+		std::array<float, 3> i_int_ADE,
+		std::array<float, 3> i_ext_ADE,
+		std::array<float*, 3> curr_ADE
+	);
+
+private:
+	void InitializeTilingImpl(Tiling::Range3D<> range);
+
+	std::vector<
+		std::unordered_map<
+			Tiling::Range3D<>,
+			std::vector<std::array<unsigned int, 4>>,
+			Tiling::Range3DHasher<>
+		>
+	> m_cellmap;
 };
 
 #endif // ENGINE_EXT_LORENTZMATERIAL_H
