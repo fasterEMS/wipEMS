@@ -28,6 +28,7 @@ Engine_Ext_UPML::Engine_Ext_UPML(Operator_Ext_UPML* op_ext) : Engine_Extension(o
 
 	//this ABC extension should be executed first!
 	m_Priority = ENG_EXT_PRIO_UPML;
+	m_TilingSupported = true;
 
 	volt_flux.Init("volt_flux", m_Op_UPML->m_numLines);
 	curr_flux.Init("curr_flux", m_Op_UPML->m_numLines);
@@ -50,27 +51,77 @@ void Engine_Ext_UPML::SetNumberOfThreads(int nrThread)
 		m_start.at(n) = m_start.at(n-1) + m_numX.at(n-1);
 }
 
-template <typename EngineType>
-void Engine_Ext_UPML::DoPreVoltageUpdatesImpl(EngineType* eng, int threadID)
+// When the tiling engine is used the global 3D space is divided into small
+// tiles for processing. We need to know whether the current tile range
+// overlaps with UPML. If there's no overlap, return immediately. If there's
+// overlap, return the local UPML coordinates of the overlapped region.
+bool
+Engine_Ext_UPML::ToLocalCoords(
+	Tiling::Range3D<> tileRange,
+	std::array<unsigned int, 3>& overlapRangeFirst,
+	std::array<unsigned int, 3>& overlapRangeLast
+)
 {
-	if (m_Eng==NULL)
-		return;
+	std::array<unsigned int, 3> pmlRangeFirst = {
+		m_Op_UPML->m_StartPos[0],
+		m_Op_UPML->m_StartPos[1],
+		m_Op_UPML->m_StartPos[2]
+	};
 
-	if (threadID>=m_NrThreads)
+	std::array<unsigned int, 3> pmlRangeLast = {
+		m_Op_UPML->m_StartPos[0] + m_Op_UPML->m_numLines[0] - 1,
+		m_Op_UPML->m_StartPos[1] + m_Op_UPML->m_numLines[1] - 1,
+		m_Op_UPML->m_StartPos[2] + m_Op_UPML->m_numLines[2] - 1
+	};
+
+	for (int n = 0; n < 3; n++)
+	{
+		if (tileRange.first[n] <= pmlRangeLast[n] &&
+		    tileRange.last[n] >= pmlRangeFirst[n])
+		{
+			// find the overlapped region between the current tile and UPML
+			overlapRangeFirst[n] = std::max(
+				(uint32_t) tileRange.first[n], pmlRangeFirst[n]
+			);
+			overlapRangeLast[n] = std::min(
+				(uint32_t) tileRange.last[n], pmlRangeLast[n]
+			);
+
+			// transform to local coordinate used by PML arrays
+			overlapRangeFirst[n] -= pmlRangeFirst[n];
+			overlapRangeLast[n] -= pmlRangeFirst[n];
+		}
+		else
+		{
+			// Tile and UPML do not overlap.
+			return false;
+		}
+	}
+
+	return true;
+}
+
+template <typename EngineType>
+void Engine_Ext_UPML::DoPreVoltageUpdatesImpl(
+	EngineType* eng,
+	std::array<unsigned int, 3> rangeFirst,
+	std::array<unsigned int, 3> rangeLast
+)
+{
+	if (m_Eng == NULL)
 		return;
 
 	unsigned int pos[3];
 	unsigned int loc_pos[3];
 	FDTD_FLOAT f_help;
 
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (loc_pos[0] = rangeFirst[0]; loc_pos[0] <= rangeLast[0]; loc_pos[0]++)
 	{
-		loc_pos[0]=lineX+m_start.at(threadID);
 		pos[0] = loc_pos[0] + m_Op_UPML->m_StartPos[0];
-		for (loc_pos[1]=0; loc_pos[1]<m_Op_UPML->m_numLines[1]; ++loc_pos[1])
+		for (loc_pos[1] = rangeFirst[1]; loc_pos[1] <= rangeLast[1]; loc_pos[1]++)
 		{
 			pos[1] = loc_pos[1] + m_Op_UPML->m_StartPos[1];
-			for (loc_pos[2]=0; loc_pos[2]<m_Op_UPML->m_numLines[2]; ++loc_pos[2])
+			for (loc_pos[2] = rangeFirst[2]; loc_pos[2] <= rangeLast[2]; loc_pos[2]++)
 			{
 				pos[2] = loc_pos[2] + m_Op_UPML->m_StartPos[2];
 
@@ -95,29 +146,53 @@ void Engine_Ext_UPML::DoPreVoltageUpdatesImpl(EngineType* eng, int threadID)
 
 void Engine_Ext_UPML::DoPreVoltageUpdates(int threadID)
 {
-	ENG_DISPATCH_ARGS(DoPreVoltageUpdatesImpl, threadID);
+	if (threadID>=m_NrThreads)
+		return;
+
+	std::array<unsigned int, 3> rangeFirst = {0, 0, 0};
+	std::array<unsigned int, 3> rangeLast = {
+		m_numX.at(threadID) - 1,
+		m_Op_UPML->m_numLines[1] - 1,
+		m_Op_UPML->m_numLines[2] - 1
+	};
+
+	ENG_DISPATCH_ARGS(DoPreVoltageUpdatesImpl, rangeFirst, rangeLast);
+}
+
+void Engine_Ext_UPML::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> tileRange)
+{
+	std::array<unsigned int, 3> rangeFirst, rangeLast;
+
+	bool overlap = ToLocalCoords(tileRange, rangeFirst, rangeLast);
+	if (overlap)
+	{
+		DoPreVoltageUpdatesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, rangeFirst, rangeLast
+		);
+	}
 }
 
 template <typename EngineType>
-void Engine_Ext_UPML::DoPostVoltageUpdatesImpl(EngineType* eng, int threadID)
+void Engine_Ext_UPML::DoPostVoltageUpdatesImpl(
+	EngineType* eng,
+	std::array<unsigned int, 3> rangeFirst,
+	std::array<unsigned int, 3> rangeLast
+)
 {
-	if (m_Eng==NULL)
-		return;
-	if (threadID>=m_NrThreads)
+	if (m_Eng == NULL)
 		return;
 
 	unsigned int pos[3];
 	unsigned int loc_pos[3];
 	FDTD_FLOAT f_help;
 
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (loc_pos[0] = rangeFirst[0]; loc_pos[0] <= rangeLast[0]; loc_pos[0]++)
 	{
-		loc_pos[0]=lineX+m_start.at(threadID);
 		pos[0] = loc_pos[0] + m_Op_UPML->m_StartPos[0];
-		for (loc_pos[1]=0; loc_pos[1]<m_Op_UPML->m_numLines[1]; ++loc_pos[1])
+		for (loc_pos[1] = rangeFirst[1]; loc_pos[1] <= rangeLast[1]; loc_pos[1]++)
 		{
 			pos[1] = loc_pos[1] + m_Op_UPML->m_StartPos[1];
-			for (loc_pos[2]=0; loc_pos[2]<m_Op_UPML->m_numLines[2]; ++loc_pos[2])
+			for (loc_pos[2] = rangeFirst[2]; loc_pos[2] <= rangeLast[2]; loc_pos[2]++)
 			{
 				pos[2] = loc_pos[2] + m_Op_UPML->m_StartPos[2];
 
@@ -139,29 +214,53 @@ void Engine_Ext_UPML::DoPostVoltageUpdatesImpl(EngineType* eng, int threadID)
 
 void Engine_Ext_UPML::DoPostVoltageUpdates(int threadID)
 {
-	ENG_DISPATCH_ARGS(DoPostVoltageUpdatesImpl, threadID);
+	if (threadID>=m_NrThreads)
+		return;
+
+	std::array<unsigned int, 3> rangeFirst = {0, 0, 0};
+	std::array<unsigned int, 3> rangeLast = {
+		m_numX.at(threadID) - 1,
+		m_Op_UPML->m_numLines[1] - 1,
+		m_Op_UPML->m_numLines[2] - 1
+	};
+
+	ENG_DISPATCH_ARGS(DoPostVoltageUpdatesImpl, rangeFirst, rangeLast);
+}
+
+void Engine_Ext_UPML::DoPostVoltageUpdates(int timestep, Tiling::Range3D<> tileRange)
+{
+	std::array<unsigned int, 3> rangeFirst, rangeLast;
+
+	bool overlap = ToLocalCoords(tileRange, rangeFirst, rangeLast);
+	if (overlap)
+	{
+		DoPostVoltageUpdatesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, rangeFirst, rangeLast
+		);
+	}
 }
 
 template <typename EngineType>
-void Engine_Ext_UPML::DoPreCurrentUpdatesImpl(EngineType* eng, int threadID)
+void Engine_Ext_UPML::DoPreCurrentUpdatesImpl(
+	EngineType* eng,
+	std::array<unsigned int, 3> rangeFirst,
+	std::array<unsigned int, 3> rangeLast
+)
 {
-	if (m_Eng==NULL)
-		return;
-	if (threadID>=m_NrThreads)
+	if (m_Eng == NULL)
 		return;
 
 	unsigned int pos[3];
 	unsigned int loc_pos[3];
 	FDTD_FLOAT f_help;
 
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (loc_pos[0] = rangeFirst[0]; loc_pos[0] <= rangeLast[0]; loc_pos[0]++)
 	{
-		loc_pos[0]=lineX+m_start.at(threadID);
 		pos[0] = loc_pos[0] + m_Op_UPML->m_StartPos[0];
-		for (loc_pos[1]=0; loc_pos[1]<m_Op_UPML->m_numLines[1]; ++loc_pos[1])
+		for (loc_pos[1] = rangeFirst[1]; loc_pos[1] <= rangeLast[1]; loc_pos[1]++)
 		{
 			pos[1] = loc_pos[1] + m_Op_UPML->m_StartPos[1];
-			for (loc_pos[2]=0; loc_pos[2]<m_Op_UPML->m_numLines[2]; ++loc_pos[2])
+			for (loc_pos[2] = rangeFirst[2]; loc_pos[2] <= rangeLast[2]; loc_pos[2]++)
 			{
 				pos[2] = loc_pos[2] + m_Op_UPML->m_StartPos[2];
 
@@ -187,29 +286,53 @@ void Engine_Ext_UPML::DoPreCurrentUpdatesImpl(EngineType* eng, int threadID)
 
 void Engine_Ext_UPML::DoPreCurrentUpdates(int threadID)
 {
-	ENG_DISPATCH_ARGS(DoPreCurrentUpdatesImpl, threadID);
+	if (threadID>=m_NrThreads)
+		return;
+
+	std::array<unsigned int, 3> rangeFirst = {0, 0, 0};
+	std::array<unsigned int, 3> rangeLast = {
+		m_numX.at(threadID) - 1,
+		m_Op_UPML->m_numLines[1] - 1,
+		m_Op_UPML->m_numLines[2] - 1
+	};
+
+	ENG_DISPATCH_ARGS(DoPreCurrentUpdatesImpl, rangeFirst, rangeLast);
+}
+
+void Engine_Ext_UPML::DoPreCurrentUpdates(int timestep, Tiling::Range3D<> tileRange)
+{
+	std::array<unsigned int, 3> rangeFirst, rangeLast;
+
+	bool overlap = ToLocalCoords(tileRange, rangeFirst, rangeLast);
+	if (overlap)
+	{
+		DoPreCurrentUpdatesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, rangeFirst, rangeLast
+		);
+	}
 }
 
 template <typename EngineType>
-void Engine_Ext_UPML::DoPostCurrentUpdatesImpl(EngineType* eng, int threadID)
+void Engine_Ext_UPML::DoPostCurrentUpdatesImpl(
+	EngineType* eng,
+	std::array<unsigned int, 3> rangeFirst,
+	std::array<unsigned int, 3> rangeLast
+)
 {
-	if (m_Eng==NULL)
-		return;
-	if (threadID>=m_NrThreads)
+	if (m_Eng == NULL)
 		return;
 
 	unsigned int pos[3];
 	unsigned int loc_pos[3];
 	FDTD_FLOAT f_help;
 
-	for (unsigned int lineX=0; lineX<m_numX.at(threadID); ++lineX)
+	for (loc_pos[0] = rangeFirst[0]; loc_pos[0] <= rangeLast[0]; loc_pos[0]++)
 	{
-		loc_pos[0]=lineX+m_start.at(threadID);
 		pos[0] = loc_pos[0] + m_Op_UPML->m_StartPos[0];
-		for (loc_pos[1]=0; loc_pos[1]<m_Op_UPML->m_numLines[1]; ++loc_pos[1])
+		for (loc_pos[1] = rangeFirst[1]; loc_pos[1] <= rangeLast[1]; loc_pos[1]++)
 		{
 			pos[1] = loc_pos[1] + m_Op_UPML->m_StartPos[1];
-			for (loc_pos[2]=0; loc_pos[2]<m_Op_UPML->m_numLines[2]; ++loc_pos[2])
+			for (loc_pos[2] = rangeFirst[2]; loc_pos[2] <= rangeLast[2]; loc_pos[2]++)
 			{
 				pos[2] = loc_pos[2] + m_Op_UPML->m_StartPos[2];
 
@@ -231,5 +354,29 @@ void Engine_Ext_UPML::DoPostCurrentUpdatesImpl(EngineType* eng, int threadID)
 
 void Engine_Ext_UPML::DoPostCurrentUpdates(int threadID)
 {
-	ENG_DISPATCH_ARGS(DoPostCurrentUpdatesImpl, threadID);
+	if (threadID>=m_NrThreads)
+		return;
+
+	std::array<unsigned int, 3> rangeFirst = {0, 0, 0};
+	std::array<unsigned int, 3> rangeLast = {
+		m_numX.at(threadID) - 1,
+		m_Op_UPML->m_numLines[1] - 1,
+		m_Op_UPML->m_numLines[2] - 1
+	};
+
+	ENG_DISPATCH_ARGS(DoPostCurrentUpdatesImpl, rangeFirst, rangeLast);
+}
+
+void Engine_Ext_UPML::DoPostCurrentUpdates(int timestep, Tiling::Range3D<> tileRange)
+{
+	std::array<unsigned int, 3> rangeFirst, rangeLast;
+
+	bool overlap = ToLocalCoords(tileRange, rangeFirst, rangeLast);
+
+	if (overlap)
+	{
+		DoPostCurrentUpdatesImpl<Engine_Tiling>(
+			(Engine_Tiling*) m_Eng, rangeFirst, rangeLast
+		);
+	}
 }
