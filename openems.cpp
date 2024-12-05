@@ -129,6 +129,7 @@ void openEMS::collectCommandLineArguments()
 {
 	// register our supported options to g_settings
 	g_settings.appendOptionDesc(optionDesc());
+	g_settings.appendOptionDesc(Operator_Tiling::optionDesc());
 	g_settings.appendOptionDesc(g_settings.optionDesc());
 }
 
@@ -250,10 +251,15 @@ openEMS::optionDesc()
 						cout << "openEMS - enabled multithreading" << endl;
 						m_engine = EngineType_Multithreaded;
 					}
+					else if (val == "tiling")
+					{
+						cout << "openEMS - enabled tiling engine" << endl;
+						m_engine = EngineType_Tiling_V1;
+					}
 				}
 			),
 		    "Choose engine type \n\n"
-			"  fastest: \tfastest available engine (default)\n"
+			"  fastest: \tfastest available stable engine (default)\n"
 			"  basic: \tbasic FDTD engine\n"
 			"  sse: \tengine using SSE vector extensions\n"
 			"  sse-compressed: \tengine using compressed "
@@ -264,6 +270,9 @@ openEMS::optionDesc()
 #else
 			"operator + sse vector extensions + multithreading\n"
 #endif
+			"  tiling: \t(experimental) highest-speed engine using "
+			"spatial-temporal tiling + compressed operator + sse vector "
+			"extensions + multithreading\n"
 		)
 		(
 			"numThreads",
@@ -707,6 +716,10 @@ bool openEMS::SetupOperator()
 	else if (m_engine == EngineType_Multithreaded)
 	{
 		FDTD_Op = Operator_Multithread::New(m_engine_numThreads);
+	}
+	else if (m_engine == EngineType_Tiling_V1)
+	{
+		FDTD_Op = Operator_Tiling::New(m_engine_numThreads);
 	}
 	else
 	{
