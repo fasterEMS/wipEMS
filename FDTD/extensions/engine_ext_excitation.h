@@ -34,12 +34,35 @@ public:
 	virtual void Apply2Voltages();
 	virtual void Apply2Current();
 
-protected:
-	template <typename EngineType>
-	void Apply2VoltagesImpl(EngineType* eng);
+	virtual void Apply2Voltages(
+		int timestep,
+		Tiling::Range3D<> range
+	);
 
-	template <typename EngineType>
-	void Apply2CurrentImpl(EngineType* eng);
+	virtual void Apply2Current(
+		int timestep,
+		Tiling::Range3D<> range
+	);
+
+protected:
+	template <typename EngineType, bool tiling=false>
+	void Apply2VoltagesImpl(
+		EngineType *eng,
+		int numTS,
+		Tiling::Range3D<> range
+	);
+
+	template <typename EngineType, bool tiling=false>
+	void Apply2CurrentImpl(
+		EngineType *eng,
+		int numTS,
+		Tiling::Range3D<> range
+	);
+
+	bool InsideTile(
+		Tiling::Range3D<> range,
+		unsigned int exc[3]
+	);
 
 	Operator_Ext_Excitation* m_Op_Exc;
 };
