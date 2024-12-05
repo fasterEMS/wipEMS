@@ -43,18 +43,40 @@ public:
 	virtual void DoPostCurrentUpdates() {Engine_Ext_UPML::DoPostCurrentUpdates(0);};
 	virtual void DoPostCurrentUpdates(int threadID);
 
+	virtual void DoPreVoltageUpdates(int timestep, Tiling::Range3D<> range);
+	virtual void DoPostVoltageUpdates(int timestep, Tiling::Range3D<> range);
+	virtual void DoPreCurrentUpdates(int timestep, Tiling::Range3D<> range);
+	virtual void DoPostCurrentUpdates(int timestep, Tiling::Range3D<> range);
+
 protected:
 	template <typename EngineType>
-	void DoPreVoltageUpdatesImpl(EngineType* eng, int threadID);
+	void DoPreVoltageUpdatesImpl(
+		EngineType* eng,
+		Tiling::Range3D<unsigned int> range
+	);
 
 	template <typename EngineType>
-	void DoPostVoltageUpdatesImpl(EngineType* eng, int threadID);
+	void DoPostVoltageUpdatesImpl(
+		EngineType* eng,
+		Tiling::Range3D<unsigned int> range
+	);
 
 	template <typename EngineType>
-	void DoPreCurrentUpdatesImpl(EngineType* eng, int threadID);
+	void DoPreCurrentUpdatesImpl(
+		EngineType* eng,
+		Tiling::Range3D<unsigned int> range
+	);
 
 	template <typename EngineType>
-	void DoPostCurrentUpdatesImpl(EngineType* eng, int threadID);
+	void DoPostCurrentUpdatesImpl(
+		EngineType* eng,
+		Tiling::Range3D<unsigned int> range
+	);
+
+	bool ToLocalCoords(
+		const Tiling::Range3D<>& range,
+		Tiling::Range3D<unsigned int>& overlapRange
+	);
 
 	Operator_Ext_UPML* m_Op_UPML;
 
