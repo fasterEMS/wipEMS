@@ -84,7 +84,7 @@ openEMS::openEMS()
 	m_OverSampling = 4;
 	m_CellConstantMaterial=false;
 
-	m_engine = EngineType_Multithreaded; //default engine type
+	m_engine = EngineType_Tiling; //default engine type
 	m_engine_numThreads = 0;
 
 	m_Abort = false;
@@ -229,7 +229,7 @@ openEMS::optionDesc()
 					if (val == "fastest")
 					{
 						// default, don't show console output
-						m_engine = EngineType_Multithreaded;
+						m_engine = EngineType_Tiling;
 					}
 					else if (val == "basic")
 					{
