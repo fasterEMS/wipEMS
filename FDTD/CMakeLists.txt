@@ -7,12 +7,12 @@ if (WITH_MPI)
      )
 endif()
 
-if (WITH_TILING)
+#if (WITH_TILING)
   set(TILING_SOURCES
      ${CMAKE_CURRENT_SOURCE_DIR}/operator_tiling.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/engine_tiling.cpp
      )
-endif()
+#endif()
 
 set(SOURCES
   ${SOURCES}
