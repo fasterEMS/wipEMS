@@ -73,11 +73,11 @@ if (WITH_MPI)
 	message(STATUS "Found MPI. INCLUDE " ${MPI_INCLUDE_PATH})
 endif()
 
-if (WITH_TILING)
+#if (WITH_TILING)
 	find_package(Hwloc REQUIRED)
 	find_package(TBB REQUIRED)
 	set(TBB_LIBRARIES "tbb")
-endif()
+#endif()
 
 # fparser
 # $ cmake -D FPARSER_ROOT_DIR=~/opt/openEMS .
@@ -169,9 +169,9 @@ ADD_SUBDIRECTORY( FDTD )
 ADD_SUBDIRECTORY( FDTD/extensions )
 ADD_SUBDIRECTORY( Common )
 
-if (WITH_TILING)
+#if (WITH_TILING)
   ADD_SUBDIRECTORY( tools/tiling )
-endif()
+#endif()
 
 INCLUDE_DIRECTORIES( ${openEMS_SOURCE_DIR} )    #find tools
 
