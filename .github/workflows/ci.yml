@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        docker-image: ["debian:latest", "ubuntu:latest", "fedora:latest"]
+        docker-image: ["debian:oldstable", "debian:latest", "ubuntu:latest", "fedora:latest"]
     container:
       image: ${{ matrix.docker-image }}
     steps:
@@ -34,6 +34,8 @@ jobs:
                                qtbase5-dev libvtk9-qt-dev octave \
                                python3-setuptools python3-numpy \
                                python3-matplotlib cython3 python3-h5py
+            # old Debian
+            apt-get install -y libqt4-dev || (echo Qt4 not installed)
           else
             echo "Unknown system!"
             exit 1
