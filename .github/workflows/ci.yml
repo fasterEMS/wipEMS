@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: ["wipems"]
+  pull_request:
+    branches: ["wipems"]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        docker-image: ["debian:latest", "ubuntu:latest", "fedora:latest"]
+    container:
+      image: ${{ matrix.docker-image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for dockerenv file
+        run: (ls /.dockerenv && echo Found dockerenv) || (echo No dockerenv)
+
+      - name: Install dependencies
+        run: |
+          if grep -q "ID=fedora" /etc/os-release; then
+            dnf install -y git 
+            dnf install -y cmake git boost-devel tinyxml-devel vtk-devel hdf5-devel \
+                           CGAL-devel vtk-qt octave python3-Cython python3-h5py \
+                           python3-matplotlib
+          elif grep -q "ID=debian" /etc/os-release || grep -q "ID=ubuntu" /etc/os-release; then
+            apt-get update
+            apt-get install -y build-essential cmake git libhdf5-dev libvtk9-dev \
+                               libboost-all-dev libcgal-dev libtinyxml-dev \
+                               qtbase5-dev libvtk9-qt-dev octave \
+                               python3-setuptools python3-numpy python3-numpy-dev \
+                               python3-matplotlib cython3 python3-h5py
+          else
+            echo "Unknown system!"
+            exit 1
+          fi
+
+      - name: Cloning openEMS-Project.git
+        run: |
+          cd ~/
+          git clone --recursive https://github.com/thliebig/openEMS-Project.git
+
+      - name: Switching openEMS.git to development branch
+        run: |
+          cd ~/openEMS-Project
+          rm -rf openEMS
+          cp -a $GITHUB_WORKSPACE openEMS  # https://github.com/actions/runner/issues/2058
+
+      - name: Building and installing openEMS
+        run: |
+          cd ~/openEMS-Project
+          if ./update_openEMS.sh ~/opt --python; then
+            cat build_*.log
+          else
+            retval=$?
+            cat build_*.log
+            echo update_openEMS.sh returned $retval.
+            exit 1
+          fi
+
+          echo "addpath('~/opt/share/openEMS/matlab')" >> ~/.octaverc
+          echo "addpath('~/opt//share/CSXCAD/matlab')" >> ~/.octaverc
+
+      - name: Testing Octave execution
+        run: |
+          cd ~/openEMS-Project/openEMS/matlab/Tutorials/
+          octave MSL_NotchFilter.m
+
+      - name: Testing Python execution
+        run: |
+          cd ~/openEMS-Project/openEMS/python/Tutorials/
+          python3 MSL_NotchFilter.py
