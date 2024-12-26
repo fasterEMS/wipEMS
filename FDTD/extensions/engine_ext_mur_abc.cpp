@@ -15,6 +15,7 @@
 *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <boost/format.hpp>
 #include "engine_ext_mur_abc.h"
 #include "operator_ext_mur_abc.h"
 #include "FDTD/engine.h"
@@ -85,8 +86,18 @@ void Engine_Ext_Mur_ABC::InitializeTiling(const Tiling::Plan3D& plan)
 		{
 			for (const Tiling::Subtile3D& subtile : tile)
 			{
-				for (const Tiling::Range3D<>& range : subtile)
+				for (size_t i = 0; i < subtile.size(); i++)
 				{
+					// Mur ABC only uses electric field, so the magnetic
+					// field's range (at odd half timesteps) must NOT be
+					// checked. The magnetic mesh is one cell smaller than
+					// the electric mesh, so it appears to be out of range
+					// to us, causing a spurious range check failure in
+					// InitializeTilingImpl().
+					if (i % 2 == 1)
+						continue;
+
+					const Tiling::Range3D<>& range = subtile[i];
 					InitializeTilingImpl(range);
 				}
 			}
@@ -113,6 +124,8 @@ void Engine_Ext_Mur_ABC::InitializeTilingImpl(Tiling::Range3D<> range)
 		pos_shift[m_nyP] = pos[m_nyP];
 		for (pos[m_nyPP] = 0; pos[m_nyPP] < m_numLines[1]; ++pos[m_nyPP])
 		{
+			pos_shift[m_nyPP] = pos[m_nyPP];
+
 			if (InsideTile(range, pos) && InsideTile(range, pos_shift))
 				// Mur ABC cells (controlled by us) is in this tile
 				m_needRun[range] = true;
@@ -120,10 +133,21 @@ void Engine_Ext_Mur_ABC::InitializeTilingImpl(Tiling::Range3D<> range)
 				// Mur ABC cells is NOT in this tile
 				m_needRun[range] = false;
 			else
+			{
 				// Mur ABC cells is only partially in this tile
-				throw std::runtime_error(
-					"Unsupported tiling partitioning for Mur ABC detected!"
-				);
+				boost::format fmt = boost::format(
+					"Unsupported tiling partitioning for Mur ABC detected! "
+					"Cells (%u, %u, %u) and (%u, %u, %u) must be both inside "
+					"tile (%lu-%lu, %lu-%lu, %lu-%lu), not one inside, one "
+					"outside."
+				) % pos[0] % pos[1] % pos[2]
+				  % pos_shift[0] % pos_shift[1] % pos_shift[2]
+				  % range.first[0] % range.last[0]
+				  % range.first[1] % range.last[1]
+				  % range.first[2] % range.last[2];
+
+				throw std::runtime_error(boost::str(fmt));
+			}
 		}
 	}
 }
