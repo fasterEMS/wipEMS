@@ -222,7 +222,7 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> til
 {
 	Tiling::Range2D<> abcRange;
 	abcRange.first = {0, 0};
-	abcRange.last = {m_numLines[0], m_numLines[1] - 1};
+	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
 
 	if (m_needRun[tileRange])
 	{
@@ -288,7 +288,7 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int timestep, Tiling::Range3D<> ti
 {
 	Tiling::Range2D<> abcRange;
 	abcRange.first = {0, 0};
-	abcRange.last = {m_numLines[0], m_numLines[1] - 1};
+	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
 
 	if (m_needRun[tileRange])
 	{
@@ -350,7 +350,7 @@ void Engine_Ext_Mur_ABC::Apply2Voltages(int timestep, Tiling::Range3D<> tileRang
 {
 	Tiling::Range2D<> abcRange;
 	abcRange.first = {0, 0};
-	abcRange.last = {m_numLines[0], m_numLines[1] - 1};
+	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
 
 	if (m_needRun[tileRange])
 	{
