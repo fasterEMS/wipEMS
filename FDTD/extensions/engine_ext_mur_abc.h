@@ -51,26 +51,20 @@ public:
 protected:
 	bool InsideTile(Tiling::Range3D<> range, unsigned int target[3]);
 
-	template <typename EngineType, bool tiling=false>
-	void DoPreVoltageUpdatesImpl(
-		EngineType* eng,
-		Tiling::Range2D<> abcRange,
-		Tiling::Range3D<> tileRange
+	bool
+	ToLocalCoords(
+		const Tiling::Range3D<>& tileRange,
+		Tiling::Range3D<>& overlapRange
 	);
 
 	template <typename EngineType, bool tiling=false>
-	void DoPostVoltageUpdatesImpl(
-		EngineType* eng,
-		Tiling::Range2D<> abcRange,
-		Tiling::Range3D<> tileRange
-	);
+	void DoPreVoltageUpdatesImpl(EngineType* eng, Tiling::Range3D<> abcRange);
 
 	template <typename EngineType, bool tiling=false>
-	void Apply2VoltagesImpl(
-		EngineType* eng,
-		Tiling::Range2D<> abcRange,
-		Tiling::Range3D<> tileRange
-	);
+	void DoPostVoltageUpdatesImpl(EngineType* eng, Tiling::Range3D<> abcRange);
+
+	template <typename EngineType, bool tiling=false>
+	void Apply2VoltagesImpl(EngineType* eng, Tiling::Range3D<> abcRange);
 
 	Operator_Ext_Mur_ABC* m_Op_mur;
 
@@ -80,7 +74,7 @@ protected:
 	int m_dir1, m_dir2, m_dir3;
 
 	unsigned int m_LineNr;
-	int m_LineNr_Shift;
+	unsigned int m_LineNr_Shift;
 	unsigned int m_numLines[2];
 
 	vector<unsigned int> m_start;

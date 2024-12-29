@@ -15,6 +15,7 @@
 *	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
 #include <boost/format.hpp>
 #include "engine_ext_mur_abc.h"
 #include "operator_ext_mur_abc.h"
@@ -121,7 +122,7 @@ void Engine_Ext_Mur_ABC::InitializeTilingImpl(Tiling::Range3D<> range)
 	for (unsigned int i = 0; i < m_numLines[0]; i++)
 	{
 		pos[m_dir2] = i;
-		pos_shift[m_dir3] = i;
+		pos_shift[m_dir2] = i;
 
 		for (unsigned int j = 0; j < m_numLines[1]; j++)
 		{
@@ -168,11 +169,57 @@ bool Engine_Ext_Mur_ABC::InsideTile(
 	return true;
 }
 
+// When the tiling engine is used the global 3D space is divided into small
+// tiles for processing. We need to know whether the current tile range
+// overlaps with mur. If there's no overlap, return immediately. If there's
+// overlap, return the local mur coordinates of the overlapped region.
+bool
+Engine_Ext_Mur_ABC::ToLocalCoords(
+	const Tiling::Range3D<>& tileRange,
+	Tiling::Range3D<>& overlapRange
+)
+{
+	Tiling::Range3D<> abcRange;
+
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
+
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	for (int n = 0; n < 3; n++)
+	{
+		if (tileRange.first[n] <= abcRange.last[n] &&
+		    tileRange.last[n] >= abcRange.first[n])
+		{
+			// find the overlapped region between the current tile and Mur ABC
+			overlapRange.first[n] = std::max(
+				tileRange.first[n], abcRange.first[n]
+			);
+			overlapRange.last[n] = std::min(
+				tileRange.last[n], abcRange.last[n]
+			);
+
+			// transform to local coordinate used by Mur ABC arrays
+			overlapRange.first[n] -= abcRange.first[n];
+			overlapRange.last[n] -= abcRange.first[n];
+		}
+		else
+		{
+			// Tile and Mur ABC do not overlap.
+			return false;
+		}
+	}
+
+	return true;
+}
+
 template <typename EngineType, bool tiling>
 void Engine_Ext_Mur_ABC::DoPreVoltageUpdatesImpl(
 	EngineType* eng,
-	Tiling::Range2D<> abcRange,
-	Tiling::Range3D<> tileRange
+	Tiling::Range3D<> abcRange
 )
 {
 	if (IsActive()==false) return;
@@ -182,18 +229,15 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdatesImpl(
 	pos[m_dir1] = m_LineNr;
 	pos_shift[m_dir1] = m_LineNr_Shift;
 
-	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
+	for (unsigned int i = abcRange.first[m_dir2]; i <= abcRange.last[m_dir2]; i++)
 	{
 		pos[m_dir2] = i;
-		pos_shift[m_dir3] = i;
+		pos_shift[m_dir2] = i;
 
-		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
+		for (unsigned int j = abcRange.first[m_dir3]; j <= abcRange.last[m_dir3]; j++)
 		{
 			pos[m_dir3] = j;
 			pos_shift[m_dir3] = j;
-
-			if (tiling && !InsideTile(tileRange, pos) && !InsideTile(tileRange, pos_shift))
-				continue;
 
 			m_volt_dir2[i][j] = eng->EngineType::GetVolt(m_dir2, pos_shift) -
 						m_Op_mur->m_Mur_Coeff_dir2[i][j] *
@@ -212,34 +256,39 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int threadID)
 	if (threadID>=m_NrThreads)
 		return;
 
-	Tiling::Range2D<> abcRange;
-	abcRange.first = {m_start.at(threadID), 0};
-	abcRange.last =
-	{
-		m_start.at(threadID) + m_numX.at(threadID) - 1,
-		m_numLines[1] - 1,
-	};
+	Tiling::Range3D<> abcRange;
 
-	ENG_DISPATCH_ARGS(
-		DoPreVoltageUpdatesImpl,
-		abcRange,
-		Tiling::Range3D<>()  // dummy value
-	);
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
+
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	ENG_DISPATCH_ARGS(DoPreVoltageUpdatesImpl, abcRange);
 }
 
 // Only used by Tiling engine.
 void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> tileRange)
 {
-	Tiling::Range2D<> abcRange;
-	abcRange.first = {0, 0};
-	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
+	Tiling::Range3D<> abcRange;
 
-	//if (m_tileMap.find(tileRange))
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
 
-	if (m_needRun[tileRange])
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	Tiling::Range3D<> range;
+	bool overlap = ToLocalCoords(tileRange, range);
+
+	if (m_needRun[tileRange] && overlap)
 	{
 		DoPreVoltageUpdatesImpl<Engine_Tiling>(
-			(Engine_Tiling*) m_Eng, abcRange, tileRange
+			(Engine_Tiling*) m_Eng, range
 		);
 	}
 }
@@ -247,8 +296,7 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> til
 template <typename EngineType, bool tiling>
 void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(
 	EngineType* eng,
-	Tiling::Range2D<> abcRange,  // dir2, dir3
-	Tiling::Range3D<> tileRange
+	Tiling::Range3D<> abcRange  // dir2, dir3
 )
 {
 	if (IsActive()==false) return;
@@ -256,16 +304,13 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(
 	unsigned int pos_shift[] = {0,0,0};
 	pos_shift[m_dir1] = m_LineNr_Shift;
 
-	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
+	for (unsigned int i = abcRange.first[m_dir2]; i <= abcRange.last[m_dir2]; i++)
 	{
-		pos_shift[m_dir3] = i;
+		pos_shift[m_dir2] = i;
 
-		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
+		for (unsigned int j = abcRange.first[m_dir3]; j <= abcRange.last[m_dir3]; j++)
 		{
 			pos_shift[m_dir3] = j;
-
-			if (tiling && !InsideTile(tileRange, pos_shift))
-				continue;
 
 			m_volt_dir2[i][j] +=
 				m_Op_mur->m_Mur_Coeff_dir2[i][j] *
@@ -284,32 +329,38 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int threadID)
 	if (threadID>=m_NrThreads)
 		return;
 
-	Tiling::Range2D<> abcRange;
-	abcRange.first = {m_start.at(threadID), 0};
-	abcRange.last =
-	{
-		m_start.at(threadID) + m_numX.at(threadID) - 1,
-		m_numLines[1] - 1,
-	};
+	Tiling::Range3D<> abcRange;
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
 
-	ENG_DISPATCH_ARGS(
-		DoPostVoltageUpdatesImpl,
-		abcRange,
-		Tiling::Range3D<>()  // dummy value
-	);
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	ENG_DISPATCH_ARGS(DoPostVoltageUpdatesImpl, abcRange);
 }
 
 // Only used by Tiling engine.
 void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int timestep, Tiling::Range3D<> tileRange)
 {
-	Tiling::Range2D<> abcRange;
-	abcRange.first = {0, 0};
-	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
+	Tiling::Range3D<> abcRange;
 
-	if (m_needRun[tileRange])
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
+
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	Tiling::Range3D<> range;
+	bool overlap = ToLocalCoords(tileRange, range);
+
+	if (m_needRun[tileRange] && overlap)
 	{
 		DoPostVoltageUpdatesImpl<Engine_Tiling>(
-			(Engine_Tiling*) m_Eng, abcRange, tileRange
+			(Engine_Tiling*) m_Eng, range
 		);
 	}
 }
@@ -317,8 +368,7 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int timestep, Tiling::Range3D<> ti
 template <typename EngineType, bool tiling>
 void Engine_Ext_Mur_ABC::Apply2VoltagesImpl(
 	EngineType* eng,
-	Tiling::Range2D<> abcRange,  // dir2, dir3
-	Tiling::Range3D<> tileRange
+	Tiling::Range3D<> abcRange  // dir2, dir3
 )
 {
 	if (IsActive()==false) return;
@@ -326,16 +376,13 @@ void Engine_Ext_Mur_ABC::Apply2VoltagesImpl(
 	unsigned int pos[] = {0,0,0};
 	pos[m_dir1] = m_LineNr;
 
-	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
+	for (unsigned int i = abcRange.first[m_dir2]; i <= abcRange.last[m_dir2]; i++)
 	{
 		pos[m_dir2] = i;
 
-		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
+		for (unsigned int j = abcRange.first[m_dir3]; j <= abcRange.last[m_dir3]; j++)
 		{
 			pos[m_dir3] = j;
-
-			if (tiling && !InsideTile(tileRange, pos))
-				continue;
 
 			eng->EngineType::SetVolt(m_dir2, pos, m_volt_dir2[i][j]);
 			eng->EngineType::SetVolt(m_dir3, pos, m_volt_dir3[i][j]);
@@ -349,32 +396,38 @@ void Engine_Ext_Mur_ABC::Apply2Voltages(int threadID)
 	if (threadID>=m_NrThreads)
 		return;
 
-	Tiling::Range2D<> abcRange;
-	abcRange.first = {m_start.at(threadID), 0};
-	abcRange.last =
-	{
-		m_start.at(threadID) + m_numX.at(threadID) - 1,
-		m_numLines[1] - 1,
-	};
+	Tiling::Range3D<> abcRange;
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
 
-	ENG_DISPATCH_ARGS(
-		Apply2VoltagesImpl,
-		abcRange,
-		Tiling::Range3D<>()  // dummy value
-	);
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	ENG_DISPATCH_ARGS(Apply2VoltagesImpl, abcRange);
 }
 
 // Only used by Tiling engine.
 void Engine_Ext_Mur_ABC::Apply2Voltages(int timestep, Tiling::Range3D<> tileRange)
 {
-	Tiling::Range2D<> abcRange;
-	abcRange.first = {0, 0};
-	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
+	Tiling::Range3D<> abcRange;
 
-	if (m_needRun[tileRange])
+	abcRange.first[m_dir1] = std::min(m_LineNr, m_LineNr_Shift);
+	abcRange.first[m_dir2] = 0;
+	abcRange.first[m_dir3] = 0;
+
+	abcRange.last[m_dir1] = std::max(m_LineNr, m_LineNr_Shift);
+	abcRange.last[m_dir2] = m_numLines[0] - 1;
+	abcRange.last[m_dir2] = m_numLines[1] - 1;
+
+	Tiling::Range3D<> range;
+	bool overlap = ToLocalCoords(tileRange, range);
+
+	if (m_needRun[tileRange] && overlap)
 	{
 		Apply2VoltagesImpl<Engine_Tiling>(
-			(Engine_Tiling*) m_Eng, abcRange, tileRange
+			(Engine_Tiling*) m_Eng, range
 		);
 	}
 }
