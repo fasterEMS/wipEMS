@@ -99,9 +99,9 @@ void Engine_Ext_UPML::DoPreVoltageUpdates(int threadID)
 		return;
 
 	Tiling::Range3D<unsigned int> range = {
-		.first = {0, 0, 0},
+		.first = {m_start.at(threadID), 0, 0},
 		.last = {
-			m_numX.at(threadID) - 1,
+			m_start.at(threadID) + m_numX.at(threadID) - 1,
 			m_Op_UPML->m_numLines[1] - 1,
 			m_Op_UPML->m_numLines[2] - 1
 		}
@@ -168,9 +168,9 @@ void Engine_Ext_UPML::DoPostVoltageUpdates(int threadID)
 		return;
 
 	Tiling::Range3D<unsigned int> range = {
-		.first = {0, 0, 0},
+		.first = {m_start.at(threadID), 0, 0},
 		.last = {
-			m_numX.at(threadID) - 1,
+			m_start.at(threadID) + m_numX.at(threadID) - 1,
 			m_Op_UPML->m_numLines[1] - 1,
 			m_Op_UPML->m_numLines[2] - 1
 		}
@@ -242,9 +242,9 @@ void Engine_Ext_UPML::DoPreCurrentUpdates(int threadID)
 		return;
 
 	Tiling::Range3D<unsigned int> range = {
-		.first = {0, 0, 0},
+		.first = {m_start.at(threadID), 0, 0},
 		.last = {
-			m_numX.at(threadID) - 1,
+			m_start.at(threadID) + m_numX.at(threadID) - 1,
 			m_Op_UPML->m_numLines[1] - 1,
 			m_Op_UPML->m_numLines[2] - 1
 		}
@@ -313,9 +313,9 @@ void Engine_Ext_UPML::DoPostCurrentUpdates(int threadID)
 		return;
 
 	Tiling::Range3D<unsigned int> range = {
-		.first = {0, 0, 0},
+		.first = {m_start.at(threadID), 0, 0},
 		.last = {
-			m_numX.at(threadID) - 1,
+			m_start.at(threadID) + m_numX.at(threadID) - 1,
 			m_Op_UPML->m_numLines[1] - 1,
 			m_Op_UPML->m_numLines[2] - 1
 		}
