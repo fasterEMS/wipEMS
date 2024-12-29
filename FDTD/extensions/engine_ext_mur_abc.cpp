@@ -253,22 +253,18 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(
 {
 	if (IsActive()==false) return;
 	if (m_Eng==NULL) return;
-	unsigned int pos[] = {0,0,0};
 	unsigned int pos_shift[] = {0,0,0};
-	pos[m_dir1] = m_LineNr;
 	pos_shift[m_dir1] = m_LineNr_Shift;
 
 	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
 	{
-		pos[m_dir2] = i;
 		pos_shift[m_dir3] = i;
 
 		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
 		{
-			pos[m_dir3] = j;
 			pos_shift[m_dir3] = j;
 
-			if (tiling && !InsideTile(tileRange, pos) && !InsideTile(tileRange, pos_shift))
+			if (tiling && !InsideTile(tileRange, pos_shift))
 				continue;
 
 			m_volt_dir2[i][j] +=
