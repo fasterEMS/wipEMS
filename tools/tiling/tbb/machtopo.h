@@ -74,9 +74,20 @@ MachTopo::MachTopo(size_t numCpus, bool useMultipleNodes, bool nodeAffinity)
 
 	for (size_t nodeIdx = 0; nodeIdx < numNodes; nodeIdx++)
 	{
-		hwloc_obj_t node = hwloc_get_obj_by_type(
-			m_topology, HWLOC_OBJ_L3CACHE, nodeIdx
-		);
+		hwloc_obj_t node;
+
+		if (useMultipleNodes || nodeAffinity)
+		{
+			node = hwloc_get_obj_by_type(
+				m_topology, HWLOC_OBJ_L3CACHE, nodeIdx
+			);
+		}
+		else
+		{
+			node = hwloc_get_obj_by_type(
+				m_topology, HWLOC_OBJ_MACHINE, 0
+			);
+		}
 
 		size_t systemNumCpus = hwloc_get_nbobjs_inside_cpuset_by_type(
 			m_topology, node->cpuset, HWLOC_OBJ_PU

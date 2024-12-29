@@ -68,7 +68,7 @@ void Operator_Tiling::Init()
 	m_index = NULL;
 
 	if (!m_numa_enable)
-	    ParaExec::init(m_numThreads, true, false);
+	    ParaExec::init(m_numThreads, false, false);
 	else if (m_numa_node == 0)
 	    ParaExec::init(m_numThreads, true, true);
 	else if (m_numa_node == 1)
