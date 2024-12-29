@@ -82,7 +82,8 @@ void ParaExec::init(size_t numCpus, bool useMultipleNodes, bool nodeAwareness)
 	for (size_t nodeId = 0; nodeId < ParaExec::numNodes(); nodeId++)
 	{
 		arenaList[nodeId].initialize(
-			machine->cpuList(nodeId).size()
+			machine->cpuList(nodeId).size(),
+			/* reserved for master */ 0
 		);
 
 		// cat't use non-pointer because it's not copy-constructable.
