@@ -56,7 +56,7 @@ protected:
 	int m_dir1, m_dir2, m_dir3;
 	bool m_top;
 	unsigned int m_LineNr;
-	int m_LineNr_Shift;
+	unsigned int m_LineNr_Shift;
 
 	double m_v_phase;
 
