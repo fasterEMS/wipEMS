@@ -26,17 +26,17 @@
 
 Engine_Ext_Mur_ABC::Engine_Ext_Mur_ABC(Operator_Ext_Mur_ABC* op_ext) :
 	Engine_Extension(op_ext),
-	m_Mur_Coeff_nyP (op_ext->m_Mur_Coeff_nyP),
-	m_Mur_Coeff_nyPP(op_ext->m_Mur_Coeff_nyPP),
-	m_volt_nyP ("volt_nyP",  op_ext->m_numLines),
-	m_volt_nyPP("volt_nyPP", op_ext->m_numLines)
+	m_Mur_Coeff_dir2 (op_ext->m_Mur_Coeff_dir2),
+	m_Mur_Coeff_dir3(op_ext->m_Mur_Coeff_dir3),
+	m_volt_dir2 ("volt_dir2",  op_ext->m_numLines),
+	m_volt_dir3("volt_dir3", op_ext->m_numLines)
 {
 	m_Op_mur = op_ext;
 	m_numLines[0] = m_Op_mur->m_numLines[0];
 	m_numLines[1] = m_Op_mur->m_numLines[1];
-	m_ny = m_Op_mur->m_ny;
-	m_nyP = m_Op_mur->m_nyP;
-	m_nyPP = m_Op_mur->m_nyPP;
+	m_dir1 = m_Op_mur->m_dir1;
+	m_dir2 = m_Op_mur->m_dir2;
+	m_dir3 = m_Op_mur->m_dir3;
 	m_LineNr = m_Op_mur->m_LineNr;
 	m_LineNr_Shift = m_Op_mur->m_LineNr_Shift;
 
@@ -45,7 +45,7 @@ Engine_Ext_Mur_ABC::Engine_Ext_Mur_ABC(Operator_Ext_Mur_ABC* op_ext) :
 	Operator_Ext_Excitation* Exc_ext = m_Op_mur->m_Op->GetExcitationExtension();
 	for (unsigned int n=0; n<Exc_ext->GetVoltCount(); ++n)
 	{
-		if ( ((Exc_ext->Volt_dir[n]==m_nyP) || (Exc_ext->Volt_dir[n]==m_nyPP)) && (Exc_ext->Volt_index[m_ny][n]==m_LineNr) )
+		if ( ((Exc_ext->Volt_dir[n]==m_dir2) || (Exc_ext->Volt_dir[n]==m_dir3)) && (Exc_ext->Volt_index[m_dir1][n]==m_LineNr) )
 		{
 			if ((int)Exc_ext->Volt_delay[n]>maxDelay)
 				maxDelay = (int)Exc_ext->Volt_delay[n];
@@ -55,7 +55,7 @@ Engine_Ext_Mur_ABC::Engine_Ext_Mur_ABC(Operator_Ext_Mur_ABC* op_ext) :
 	if (maxDelay>=0)
 	{
 		m_start_TS = maxDelay + m_Op_mur->m_Op->GetExcitationSignal()->GetLength() + 10; //give it some extra timesteps, for the excitation to travel at least one cell away
-		cerr << "Engine_Ext_Mur_ABC::Engine_Ext_Mur_ABC: Warning: Excitation inside the Mur-ABC #" <<  m_ny << "-" << (int)(m_LineNr>0) << " found!!!!  Mur-ABC will be switched on after excitation is done at " << m_start_TS << " timesteps!!! " << endl;
+		cerr << "Engine_Ext_Mur_ABC::Engine_Ext_Mur_ABC: Warning: Excitation inside the Mur-ABC #" <<  m_dir1 << "-" << (int)(m_LineNr>0) << " found!!!!  Mur-ABC will be switched on after excitation is done at " << m_start_TS << " timesteps!!! " << endl;
 	}
 
 	SetNumberOfThreads(1);
@@ -115,16 +115,18 @@ void Engine_Ext_Mur_ABC::InitializeTilingImpl(Tiling::Range3D<> range)
 {
 	unsigned int pos[] = {0,0,0};
 	unsigned int pos_shift[] = {0,0,0};
-	pos[m_ny] = m_LineNr;
-	pos_shift[m_ny] = m_LineNr_Shift;
+	pos[m_dir1] = m_LineNr;
+	pos_shift[m_dir1] = m_LineNr_Shift;
 
-	for (unsigned int lineX = 0; lineX < m_numLines[0]; ++lineX)
+	for (unsigned int i = 0; i < m_numLines[0]; i++)
 	{
-		pos[m_nyP]=lineX;
-		pos_shift[m_nyP] = pos[m_nyP];
-		for (pos[m_nyPP] = 0; pos[m_nyPP] < m_numLines[1]; ++pos[m_nyPP])
+		pos[m_dir2] = i;
+		pos_shift[m_dir3] = i;
+
+		for (unsigned int j = 0; j < m_numLines[1]; j++)
 		{
-			pos_shift[m_nyPP] = pos[m_nyPP];
+			pos[m_dir3] = j;
+			pos_shift[m_dir3] = j;
 
 			if (InsideTile(range, pos) && InsideTile(range, pos_shift))
 				// Mur ABC cells (controlled by us) is in this tile
@@ -177,21 +179,29 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdatesImpl(
 	if (m_Eng==NULL) return;
 	unsigned int pos[] = {0,0,0};
 	unsigned int pos_shift[] = {0,0,0};
-	pos[m_ny] = m_LineNr;
-	pos_shift[m_ny] = m_LineNr_Shift;
+	pos[m_dir1] = m_LineNr;
+	pos_shift[m_dir1] = m_LineNr_Shift;
 
-	for (unsigned int lineX = abcRange.first[0]; lineX <= abcRange.last[0]; ++lineX)
+	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
 	{
-		pos[m_nyP]=lineX;
-		pos_shift[m_nyP] = pos[m_nyP];
-		for (pos[m_nyPP] = abcRange.first[1]; pos[m_nyPP] <= abcRange.last[1]; ++pos[m_nyPP])
+		pos[m_dir2] = i;
+		pos_shift[m_dir3] = i;
+
+		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
 		{
+			pos[m_dir3] = j;
+			pos_shift[m_dir3] = j;
+
 			if (tiling && !InsideTile(tileRange, pos) && !InsideTile(tileRange, pos_shift))
 				continue;
 
-			pos_shift[m_nyPP] = pos[m_nyPP];
-			m_volt_nyP[pos[m_nyP]][pos[m_nyPP]] = eng->EngineType::GetVolt(m_nyP,pos_shift) - m_Op_mur->m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyP,pos);
-			m_volt_nyPP[pos[m_nyP]][pos[m_nyPP]] = eng->EngineType::GetVolt(m_nyPP,pos_shift) - m_Op_mur->m_Mur_Coeff_nyPP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyPP,pos);
+			m_volt_dir2[i][j] = eng->EngineType::GetVolt(m_dir2, pos_shift) -
+						m_Op_mur->m_Mur_Coeff_dir2[i][j] *
+						eng->EngineType::GetVolt(m_dir2, pos);
+
+			m_volt_dir3[i][j] = eng->EngineType::GetVolt(m_dir3, pos_shift) -
+						m_Op_mur->m_Mur_Coeff_dir3[i][j] *
+						eng->EngineType::GetVolt(m_dir3, pos);
 		}
 	}
 }
@@ -224,6 +234,8 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> til
 	abcRange.first = {0, 0};
 	abcRange.last = {m_numLines[0] - 1, m_numLines[1] - 1};
 
+	//if (m_tileMap.find(tileRange))
+
 	if (m_needRun[tileRange])
 	{
 		DoPreVoltageUpdatesImpl<Engine_Tiling>(
@@ -235,7 +247,7 @@ void Engine_Ext_Mur_ABC::DoPreVoltageUpdates(int timestep, Tiling::Range3D<> til
 template <typename EngineType, bool tiling>
 void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(
 	EngineType* eng,
-	Tiling::Range2D<> abcRange,  // nyP, nyPP
+	Tiling::Range2D<> abcRange,  // dir2, dir3
 	Tiling::Range3D<> tileRange
 )
 {
@@ -243,21 +255,29 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdatesImpl(
 	if (m_Eng==NULL) return;
 	unsigned int pos[] = {0,0,0};
 	unsigned int pos_shift[] = {0,0,0};
-	pos[m_ny] = m_LineNr;
-	pos_shift[m_ny] = m_LineNr_Shift;
+	pos[m_dir1] = m_LineNr;
+	pos_shift[m_dir1] = m_LineNr_Shift;
 
-	for (unsigned int lineX = abcRange.first[0]; lineX <= abcRange.last[0]; ++lineX)
+	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
 	{
-		pos[m_nyP]=lineX;
-		pos_shift[m_nyP] = pos[m_nyP];
-		for (pos[m_nyPP] = abcRange.first[1]; pos[m_nyPP] <= abcRange.last[1]; ++pos[m_nyPP])
+		pos[m_dir2] = i;
+		pos_shift[m_dir3] = i;
+
+		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
 		{
+			pos[m_dir3] = j;
+			pos_shift[m_dir3] = j;
+
 			if (tiling && !InsideTile(tileRange, pos) && !InsideTile(tileRange, pos_shift))
 				continue;
 
-			pos_shift[m_nyPP] = pos[m_nyPP];
-			m_volt_nyP[pos[m_nyP]][pos[m_nyPP]] += m_Op_mur->m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyP,pos_shift);
-			m_volt_nyPP[pos[m_nyP]][pos[m_nyPP]] += m_Op_mur->m_Mur_Coeff_nyPP[pos[m_nyP]][pos[m_nyPP]] * eng->EngineType::GetVolt(m_nyPP,pos_shift);
+			m_volt_dir2[i][j] +=
+				m_Op_mur->m_Mur_Coeff_dir2[i][j] *
+				eng->EngineType::GetVolt(m_dir2, pos_shift);
+
+			m_volt_dir3[i][j] +=
+				m_Op_mur->m_Mur_Coeff_dir3[i][j] *
+				eng->EngineType::GetVolt(m_dir3, pos_shift);
 		}
 	}
 }
@@ -301,25 +321,28 @@ void Engine_Ext_Mur_ABC::DoPostVoltageUpdates(int timestep, Tiling::Range3D<> ti
 template <typename EngineType, bool tiling>
 void Engine_Ext_Mur_ABC::Apply2VoltagesImpl(
 	EngineType* eng,
-	Tiling::Range2D<> abcRange,  // nyP, nyPP
+	Tiling::Range2D<> abcRange,  // dir2, dir3
 	Tiling::Range3D<> tileRange
 )
 {
 	if (IsActive()==false) return;
 	if (m_Eng==NULL) return;
 	unsigned int pos[] = {0,0,0};
-	pos[m_ny] = m_LineNr;
+	pos[m_dir1] = m_LineNr;
 
-	for (unsigned int lineX = abcRange.first[0]; lineX <= abcRange.last[0]; ++lineX)
+	for (unsigned int i = abcRange.first[0]; i <= abcRange.last[0]; i++)
 	{
-		pos[m_nyP]=lineX;
-		for (pos[m_nyPP] = abcRange.first[1]; pos[m_nyPP] <= abcRange.last[1]; ++pos[m_nyPP])
+		pos[m_dir2] = i;
+
+		for (unsigned int j = abcRange.first[1]; j <= abcRange.last[1]; j++)
 		{
+			pos[m_dir3] = j;
+
 			if (tiling && !InsideTile(tileRange, pos))
 				continue;
 
-			eng->EngineType::SetVolt(m_nyP,pos, m_volt_nyP[pos[m_nyP]][pos[m_nyPP]]);
-			eng->EngineType::SetVolt(m_nyPP,pos, m_volt_nyPP[pos[m_nyP]][pos[m_nyPP]]);
+			eng->EngineType::SetVolt(m_dir2, pos, m_volt_dir2[i][j]);
+			eng->EngineType::SetVolt(m_dir3, pos, m_volt_dir3[i][j]);
 		}
 	}
 }

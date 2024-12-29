@@ -461,7 +461,7 @@ cdef class openEMS:
 
     def _SetLibraryArguments(self, arguments):
         allOptions = []
-        integerOptions = ["verbose", "numthreads"]
+        integerOptions = ["verbose", "numthreads", "numa-node"]
 
         for key, val in arguments.items():
             key = key.replace("_", "-")

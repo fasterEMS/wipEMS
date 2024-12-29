@@ -19,13 +19,15 @@
 #include "tools/tiling/tbb/paraexec.h"
 //#include "tools/tiling/tbb/first_touch.h"
 
-Operator_Tiling* Operator_Tiling::New()
+Operator_Tiling* Operator_Tiling::New(unsigned int numThreads)
+//Operator_Tiling* Operator_Tiling::New()
 {
 	std::cout << "Create FDTD operator ";
 	std::cout << "(compressed SSE + multi-threading + spatial/temporal tiling)";
 	std::cout << std::endl;
 
 	Operator_Tiling* op = new Operator_Tiling();
+	op->setNumThreads(numThreads);
 	op->Init();
 	return op;
 }
@@ -46,6 +48,11 @@ Operator_Tiling::Operator_Tiling() : Operator()
 	m_index = NULL;
 }
 
+void Operator_Tiling::setNumThreads(unsigned int numThreads)
+{
+	m_numThreads = numThreads;
+}
+
 void Operator_Tiling::Init()
 {
 	Delete();
@@ -60,7 +67,14 @@ void Operator_Tiling::Init()
 	}
 	m_index = NULL;
 
-	ParaExec::init(true, m_numa);
+	if (!m_numa_enable)
+	    ParaExec::init(m_numThreads, true, false);
+	else if (m_numa_node == 0)
+	    ParaExec::init(m_numThreads, true, true);
+	else if (m_numa_node == 1)
+	    ParaExec::init(m_numThreads, false, true);
+
+	ParaExec::printSystemInfo();
 }
 
 namespace po = boost::program_options;
@@ -86,7 +100,9 @@ Operator_Tiling::optionDesc()
 		                "Half timestep batch size for Tiling engine "
 		                "Must be even and smaller than specified tile "
 		                "size's smallest dimensions. See manual.")
-		("numa",        "Enable NUMA awareness. See manual");
+		("numa",        "Enable NUMA or L3 cache awareness. See manual")
+		("numa-node",   po::value<unsigned int>()->default_value(0),
+		                "Enable NUMA or L3 cache awareness. See manual");
 
 	return optdesc;
 }
@@ -137,7 +153,11 @@ void Operator_Tiling::applyOptions()
 		m_tileHalfTs = g_settings.getOption("tile-height").as<unsigned int>();
 
 	if (g_settings.hasOption("numa"))
-		m_numa = true;
+		m_numa_enable = true;
+	m_numa_node = g_settings.getOption("numa-node").as<unsigned int>();
+
+	if (!m_numa_enable && m_numa_node)
+		throw std::runtime_error("To use --numa-node, --numa must be enabled.");
 }
 
 void Operator_Tiling::InitOperator()

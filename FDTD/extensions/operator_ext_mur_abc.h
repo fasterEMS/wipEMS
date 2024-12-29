@@ -52,8 +52,8 @@ public:
 protected:
 	Operator_Ext_Mur_ABC(Operator* op, Operator_Ext_Mur_ABC* op_ext);
 	void Initialize();
-	int m_ny;
-	int m_nyP,m_nyPP;
+
+	int m_dir1, m_dir2, m_dir3;
 	bool m_top;
 	unsigned int m_LineNr;
 	int m_LineNr_Shift;
@@ -62,8 +62,8 @@ protected:
 
 	unsigned int m_numLines[2];
 
-	ArrayLib::ArrayIJ<FDTD_FLOAT> m_Mur_Coeff_nyP;
-	ArrayLib::ArrayIJ<FDTD_FLOAT> m_Mur_Coeff_nyPP;
+	ArrayLib::ArrayIJ<FDTD_FLOAT> m_Mur_Coeff_dir2;
+	ArrayLib::ArrayIJ<FDTD_FLOAT> m_Mur_Coeff_dir3;
 };
 
 #endif // OPERATOR_EXT_MUR_ABC_H

@@ -49,7 +49,8 @@ namespace ParaExec
 	};
 	inline std::vector<nodePinner*> pinningObserversList;
 
-	inline void init(bool useMultipleNodes=true, bool nodeAwareness=true);
+	inline void init(size_t numCpus=0, bool useMultipleNodes=true, bool nodeAwareness=true);
+	inline void printSystemInfo();
 
 	inline size_t numNodes();
 
@@ -71,9 +72,9 @@ namespace ParaExec
 	inline void barrier();
 }
 
-void ParaExec::init(bool useMultipleNodes, bool nodeAwareness)
+void ParaExec::init(size_t numCpus, bool useMultipleNodes, bool nodeAwareness)
 {
-	machine = new MachTopo(useMultipleNodes, nodeAwareness);
+	machine = new MachTopo(numCpus, useMultipleNodes, nodeAwareness);
 
 	arenaList.resize(machine->numNodes());
 	runtimeList.resize(machine->numNodes());
@@ -93,6 +94,20 @@ void ParaExec::init(bool useMultipleNodes, bool nodeAwareness)
 				new nodePinner(arenaList[nodeId], nodeId)
 			);
 		}
+	}
+}
+
+void ParaExec::printSystemInfo()
+{
+	fprintf(stderr, "total L3 cache node: %zu\n", numNodes());
+	for (size_t i = 0; i < numNodes(); i++)
+	{
+		const std::vector<size_t>& cpuList = ParaExec::machine->cpuList(i);
+
+		fprintf(stderr, "node %zu (%zu CPUs): ", i, cpuList.size());
+		for (size_t cpuId : cpuList)
+			fprintf(stderr, "%zu ", cpuId);
+		fprintf(stderr, "\n");
 	}
 }
 

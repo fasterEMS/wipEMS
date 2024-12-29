@@ -32,7 +32,7 @@
 class MachTopo
 {
 public:
-	inline MachTopo(bool useMultipleNodes=true, bool nodeAffinity=true);
+	inline MachTopo(size_t numCpus=0, bool useMultipleNodes=true, bool nodeAffinity=true);
 
 	inline size_t numNodes();
 	inline hwloc_topology_t topology();
@@ -46,7 +46,7 @@ private:
 	std::vector<std::vector<hwloc_cpuset_t>> m_cpuSet;
 };
 
-MachTopo::MachTopo(bool useMultipleNodes, bool nodeAffinity)
+MachTopo::MachTopo(size_t numCpus, bool useMultipleNodes, bool nodeAffinity)
 {
 	hwloc_topology_init(&m_topology);
 	hwloc_topology_load(m_topology);
@@ -78,11 +78,14 @@ MachTopo::MachTopo(bool useMultipleNodes, bool nodeAffinity)
 			m_topology, HWLOC_OBJ_L3CACHE, nodeIdx
 		);
 
-		size_t numCpus = hwloc_get_nbobjs_inside_cpuset_by_type(
+		size_t systemNumCpus = hwloc_get_nbobjs_inside_cpuset_by_type(
 			m_topology, node->cpuset, HWLOC_OBJ_PU
 		);
 
-		for (size_t cpuIdx = 0; cpuIdx < numCpus; cpuIdx++)
+		if (numCpus != 0 && systemNumCpus > numCpus)
+			systemNumCpus = numCpus;
+
+		for (size_t cpuIdx = 0; cpuIdx < systemNumCpus; cpuIdx++)
 		{
 			hwloc_obj_t cpu = hwloc_get_obj_inside_cpuset_by_type(
 				m_topology, node->cpuset, HWLOC_OBJ_PU, cpuIdx

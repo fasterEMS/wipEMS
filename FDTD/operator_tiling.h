@@ -37,8 +37,8 @@ public:
 	static boost::program_options::options_description optionDesc();
 
 	//! Create a new operator
-	//static Operator_Tiling* New(uint32_t numThreads=0);
-	static Operator_Tiling* New();
+	static Operator_Tiling* New(uint32_t numThreads=0);
+	//static Operator_Tiling* New();
 	virtual ~Operator_Tiling();
 
 	virtual Engine* CreateEngine();
@@ -128,6 +128,7 @@ protected:
 	virtual void Init();
 	void Delete();
 	virtual void Reset();
+	virtual void setNumThreads(unsigned int numThreads);
 	virtual void InitOperator();
 	virtual int CalcECOperator(DebugFlags debugFlags=None);
 
@@ -141,7 +142,9 @@ protected:
 
 	std::array<int, 3>  m_tileSize;
 	std::array<char, 3> m_tileType;
-	bool m_numa = true;
+	bool m_numa_enable = false;
+	unsigned int m_numa_node = 0;
+	unsigned int m_numThreads;
 
 	enum OP_TYPE{
 		VV = 0,

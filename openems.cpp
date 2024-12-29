@@ -719,7 +719,7 @@ bool openEMS::SetupOperator()
 	}
 	else if (m_engine == EngineType_Tiling_V1)
 	{
-		FDTD_Op = Operator_Tiling::New();
+		FDTD_Op = Operator_Tiling::New(m_engine_numThreads);
 	}
 	else
 	{

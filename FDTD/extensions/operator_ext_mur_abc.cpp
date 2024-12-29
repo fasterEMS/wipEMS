@@ -35,7 +35,7 @@ Operator_Ext_Mur_ABC::Operator_Ext_Mur_ABC(Operator* op, Operator_Ext_Mur_ABC* o
 {
 	Initialize();
 	m_v_phase = op_ext->m_v_phase;
-	SetDirection(op_ext->m_ny,op_ext->m_top);
+	SetDirection(op_ext->m_dir1,op_ext->m_top);
 }
 
 Operator_Extension* Operator_Ext_Mur_ABC::Clone(Operator* op)
@@ -47,18 +47,18 @@ Operator_Extension* Operator_Ext_Mur_ABC::Clone(Operator* op)
 
 bool Operator_Ext_Mur_ABC::IsCylinderCoordsSave(bool closedAlpha, bool R0_included) const
 {
-	if ((m_ny==0) && (!m_top) && (R0_included || closedAlpha))
+	if ((m_dir1==0) && (!m_top) && (R0_included || closedAlpha))
 		return false;
-	if ((m_ny==1) && (closedAlpha))
+	if ((m_dir1==1) && (closedAlpha))
 		return false;
 	return true;
 }
 
 bool Operator_Ext_Mur_ABC::IsCylindricalMultiGridSave(bool child) const
 {
-	if (m_ny==2) //always allow in z-direction
+	if (m_dir1==2) //always allow in z-direction
 		return true;
-	if ((m_ny==0) && (m_top) && (!child)) //if top r-direction and is not a child grid allow Mur...
+	if ((m_dir1==0) && (m_top) && (!child)) //if top r-direction and is not a child grid allow Mur...
 		return true;
 	//in all other cases this ABC is not save to use in CylindricalMultiGrid
 	return false;
@@ -66,9 +66,9 @@ bool Operator_Ext_Mur_ABC::IsCylindricalMultiGridSave(bool child) const
 
 void Operator_Ext_Mur_ABC::Initialize()
 {
-	m_ny = -1;
-	m_nyP = -1;
-	m_nyPP = -1;
+	m_dir1 = -1;
+	m_dir2 = -1;
+	m_dir3 = -1;
 	m_LineNr = 0;
 	m_LineNr_Shift = 0;
 
@@ -83,10 +83,10 @@ void Operator_Ext_Mur_ABC::SetDirection(int ny, bool top_ny)
 	if ((ny<0) || (ny>2))
 		return;
 
-	m_ny = ny;
+	m_dir1 = ny;
 	m_top = top_ny;
-	m_nyP = (ny+1)%3;
-	m_nyPP = (ny+2)%3;
+	m_dir2 = (ny+1)%3;
+	m_dir3 = (ny+2)%3;
 	if (!top_ny)
 	{
 		m_LineNr = 0;
@@ -94,28 +94,28 @@ void Operator_Ext_Mur_ABC::SetDirection(int ny, bool top_ny)
 	}
 	else
 	{
-		m_LineNr = m_Op->GetNumberOfLines(m_ny,true)-1;
-		m_LineNr_Shift = m_Op->GetNumberOfLines(m_ny,true) - 2;
+		m_LineNr = m_Op->GetNumberOfLines(m_dir1,true)-1;
+		m_LineNr_Shift = m_Op->GetNumberOfLines(m_dir1,true) - 2;
 	}
 
-	m_numLines[0] = m_Op->GetNumberOfLines(m_nyP,true);
-	m_numLines[1] = m_Op->GetNumberOfLines(m_nyPP,true);
+	m_numLines[0] = m_Op->GetNumberOfLines(m_dir2,true);
+	m_numLines[1] = m_Op->GetNumberOfLines(m_dir3,true);
 
-	m_Mur_Coeff_nyP.Init("Mur_Coeff_nyP", m_numLines);
-	m_Mur_Coeff_nyPP.Init("Mur_Coeff_nyPP", m_numLines);
+	m_Mur_Coeff_dir2.Init("Mur_Coeff_dir2", m_numLines);
+	m_Mur_Coeff_dir3.Init("Mur_Coeff_dir3", m_numLines);
 }
 
 bool Operator_Ext_Mur_ABC::BuildExtension()
 {
-	if (m_ny<0)
+	if (m_dir1<0)
 	{
 		cerr << "Operator_Ext_Mur_ABC::BuildExtension: Warning, Extension not initialized! Use SetDirection!! Abort build!!" << endl;
 		return false;
 	}
 	double dT = m_Op->GetTimestep();
 	unsigned int pos[] = {0,0,0};
-	pos[m_ny] = m_LineNr;
-	double delta = fabs(m_Op->GetEdgeLength(m_ny,pos));
+	pos[m_dir1] = m_LineNr;
+	double delta = fabs(m_Op->GetEdgeLength(m_dir1,pos));
 	double coord[] = {0,0,0};
 	coord[0] = m_Op->GetDiscLine(0,pos[0]);
 	coord[1] = m_Op->GetDiscLine(1,pos[1]);
@@ -125,22 +125,22 @@ bool Operator_Ext_Mur_ABC::BuildExtension()
 	double c0t;
 
 	if (m_LineNr==0)
-		coord[m_ny] = m_Op->GetDiscLine(m_ny,pos[m_ny]) + delta/2 / m_Op->GetGridDelta();
+		coord[m_dir1] = m_Op->GetDiscLine(m_dir1,pos[m_dir1]) + delta/2 / m_Op->GetGridDelta();
 	else
-		coord[m_ny] = m_Op->GetDiscLine(m_ny,pos[m_ny]) - delta/2 / m_Op->GetGridDelta();
+		coord[m_dir1] = m_Op->GetDiscLine(m_dir1,pos[m_dir1]) - delta/2 / m_Op->GetGridDelta();
 
 	int posBB[3];
-	posBB[m_ny]  =pos[m_ny];
-	posBB[m_nyPP]=-1;
+	posBB[m_dir1]  =pos[m_dir1];
+	posBB[m_dir3]=-1;
 
-	for (pos[m_nyP]=0; pos[m_nyP]<m_numLines[0]; ++pos[m_nyP])
+	for (pos[m_dir2]=0; pos[m_dir2]<m_numLines[0]; ++pos[m_dir2])
 	{
-		posBB[m_nyP]=pos[m_nyP];
+		posBB[m_dir2]=pos[m_dir2];
 		vector<CSPrimitives*> vPrims = m_Op->GetPrimitivesBoundBox(posBB[0], posBB[1], posBB[2], CSProperties::MATERIAL);
-		coord[m_nyP] = m_Op->GetDiscLine(m_nyP,pos[m_nyP]);
-		for (pos[m_nyPP]=0; pos[m_nyPP]<m_numLines[1]; ++pos[m_nyPP])
+		coord[m_dir2] = m_Op->GetDiscLine(m_dir2,pos[m_dir2]);
+		for (pos[m_dir3]=0; pos[m_dir3]<m_numLines[1]; ++pos[m_dir3])
 		{
-			coord[m_nyPP] = m_Op->GetDiscLine(m_nyPP,pos[m_nyPP]);
+			coord[m_dir3] = m_Op->GetDiscLine(m_dir3,pos[m_dir3]);
 //			CSProperties* prop = m_Op->GetGeometryCSX()->GetPropertyByCoordPriority(coord, CSProperties::MATERIAL, false);
 			CSProperties* prop = m_Op->GetGeometryCSX()->GetPropertyByCoordPriority(coord, vPrims, false);
 			if (prop)
@@ -148,22 +148,22 @@ bool Operator_Ext_Mur_ABC::BuildExtension()
 				CSPropMaterial* mat = prop->ToMaterial();
 
 				//nP
-				eps = mat->GetEpsilonWeighted(m_nyP,coord);
-				mue = mat->GetMueWeighted(m_nyP,coord);
+				eps = mat->GetEpsilonWeighted(m_dir2,coord);
+				mue = mat->GetMueWeighted(m_dir2,coord);
 				if (m_v_phase>0.0)
 					c0t = m_v_phase * dT;
 				else
 					c0t = __C0__ * dT / sqrt(eps*mue);
-				m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] = (c0t - delta) / (c0t + delta);
+				m_Mur_Coeff_dir2[pos[m_dir2]][pos[m_dir3]] = (c0t - delta) / (c0t + delta);
 
 				//nPP
-				eps = mat->GetEpsilonWeighted(m_nyPP,coord);
-				mue = mat->GetMueWeighted(m_nyPP,coord);
+				eps = mat->GetEpsilonWeighted(m_dir3,coord);
+				mue = mat->GetMueWeighted(m_dir3,coord);
 				if (m_v_phase>0.0)
 					c0t = m_v_phase * dT;
 				else
 					c0t = __C0__ * dT / sqrt(eps*mue);
-				m_Mur_Coeff_nyPP[pos[m_nyP]][pos[m_nyPP]] = (c0t - delta) / (c0t + delta);
+				m_Mur_Coeff_dir3[pos[m_dir2]][pos[m_dir3]] = (c0t - delta) / (c0t + delta);
 
 			}
 			else
@@ -172,13 +172,13 @@ bool Operator_Ext_Mur_ABC::BuildExtension()
 					c0t = m_v_phase * dT;
 				else
 					c0t = __C0__ / sqrt(m_Op->GetBackgroundEpsR()*m_Op->GetBackgroundMueR()) * dT;
-				m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] = (c0t - delta) / (c0t + delta);
-				m_Mur_Coeff_nyPP[pos[m_nyP]][pos[m_nyPP]] = m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]];
+				m_Mur_Coeff_dir2[pos[m_dir2]][pos[m_dir3]] = (c0t - delta) / (c0t + delta);
+				m_Mur_Coeff_dir3[pos[m_dir2]][pos[m_dir3]] = m_Mur_Coeff_dir2[pos[m_dir2]][pos[m_dir3]];
 			}
-//			cerr << m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] << " : " << m_Mur_Coeff_nyP[pos[m_nyP]][pos[m_nyPP]] << endl;
+//			cerr << m_Mur_Coeff_dir2[pos[m_dir2]][pos[m_dir3]] << " : " << m_Mur_Coeff_dir2[pos[m_dir2]][pos[m_dir3]] << endl;
 		}
 	}
-//	cerr << "Operator_Ext_Mur_ABC::BuildExtension(): " << m_ny << " @ " << m_LineNr << endl;
+//	cerr << "Operator_Ext_Mur_ABC::BuildExtension(): " << m_dir1 << " @ " << m_LineNr << endl;
 	return true;
 }
 
@@ -193,7 +193,7 @@ void Operator_Ext_Mur_ABC::ShowStat(ostream &ostr)  const
 {
 	Operator_Extension::ShowStat(ostr);
 	string XYZ[3] = {"x","y","z"};
-	ostr << " Active direction\t: " << XYZ[m_ny] << " at line: " << m_LineNr << endl;
+	ostr << " Active direction\t: " << XYZ[m_dir1] << " at line: " << m_LineNr << endl;
 	if (m_v_phase>0.0)
 		ostr << " Used phase velocity\t: " << m_v_phase << " (" << m_v_phase/__C0__ << " * c_0)" <<endl;
 }
