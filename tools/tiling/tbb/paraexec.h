@@ -22,6 +22,7 @@
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
 #include <tbb/task_scheduler_observer.h>
+#include <tbb/global_control.h>
 
 #include "machtopo.h"
 
@@ -33,6 +34,8 @@
 namespace ParaExec
 {
 	inline MachTopo* machine;
+	inline tbb::global_control* tbbGlobal;
+
 	inline std::vector<tbb::task_arena> arenaList;
 	inline std::vector<tbb::task_group*> taskGroupList;
 	inline std::vector<double> runtimeList;
@@ -50,6 +53,8 @@ namespace ParaExec
 	inline std::vector<nodePinner*> pinningObserversList;
 
 	inline void init(size_t numCpus=0, bool useMultipleNodes=true, bool nodeAwareness=true);
+	inline void fin();
+
 	inline void printSystemInfo();
 
 	inline size_t numNodes();
@@ -75,6 +80,7 @@ namespace ParaExec
 void ParaExec::init(size_t numCpus, bool useMultipleNodes, bool nodeAwareness)
 {
 	machine = new MachTopo(numCpus, useMultipleNodes, nodeAwareness);
+	tbbGlobal = new tbb::global_control(tbb::global_control::max_allowed_parallelism, numCpus);
 
 	arenaList.resize(machine->numNodes());
 	runtimeList.resize(machine->numNodes());
@@ -96,6 +102,25 @@ void ParaExec::init(size_t numCpus, bool useMultipleNodes, bool nodeAwareness)
 			);
 		}
 	}
+}
+
+void ParaExec::fin()
+{
+	for (nodePinner* pinner: pinningObserversList)
+		delete pinner;
+
+	for (tbb::task_group* group : taskGroupList)
+		delete group;
+
+	pinningObserversList.clear();
+	taskGroupList.clear();
+	arenaList.clear();
+
+	delete machine;
+	delete tbbGlobal;
+
+	machine = NULL;
+	tbbGlobal = NULL;
 }
 
 void ParaExec::printSystemInfo()

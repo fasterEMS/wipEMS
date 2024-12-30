@@ -55,6 +55,9 @@ void Operator_Tiling::setNumThreads(unsigned int numThreads)
 
 void Operator_Tiling::Init()
 {
+	// When we're running as a shared library, the destructor is never called
+	// between different simulations...
+	ParaExec::fin();
 	Delete();
 	Operator::Init();
 
@@ -412,4 +415,5 @@ void Operator_Tiling::Reset()
 {
 	Delete();
 	Operator::Reset();
+	ParaExec::fin();
 }

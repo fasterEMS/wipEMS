@@ -33,6 +33,7 @@ class MachTopo
 {
 public:
 	inline MachTopo(size_t numCpus=0, bool useMultipleNodes=true, bool nodeAffinity=true);
+	inline ~MachTopo();
 
 	inline size_t numNodes();
 	inline hwloc_topology_t topology();
@@ -114,6 +115,11 @@ MachTopo::MachTopo(size_t numCpus, bool useMultipleNodes, bool nodeAffinity)
 			}
 		}
 	}
+}
+
+MachTopo::~MachTopo()
+{
+	hwloc_topology_destroy(m_topology);
 }
 
 size_t MachTopo::numNodes()
