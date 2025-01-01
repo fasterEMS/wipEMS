@@ -17,6 +17,7 @@
 #ifndef TILING_PARAEXEC_H
 #define TILING_PARAEXEC_H
 
+#include <chrono>
 #include <functional>
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
