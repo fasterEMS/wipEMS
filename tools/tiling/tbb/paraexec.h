@@ -81,7 +81,9 @@ namespace ParaExec
 void ParaExec::init(size_t numCpus, bool useMultipleNodes, bool nodeAwareness)
 {
 	machine = new MachTopo(numCpus, useMultipleNodes, nodeAwareness);
-	tbbGlobal = new tbb::global_control(tbb::global_control::max_allowed_parallelism, numCpus);
+
+	if (numCpus != 0)
+		tbbGlobal = new tbb::global_control(tbb::global_control::max_allowed_parallelism, numCpus);
 
 	arenaList.resize(machine->numNodes());
 	runtimeList.resize(machine->numNodes());
