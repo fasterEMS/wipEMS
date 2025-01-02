@@ -16,6 +16,7 @@
  */
 #include "engine_tiling.h"
 #include "operator_tiling.h"
+#include "tools/denormal.h"
 #include "tools/tiling/tbb/paraexec.h"
 //#include "tools/tiling/tbb/first_touch.h"
 
@@ -69,6 +70,10 @@ void Operator_Tiling::Init()
 		m_compOprArr[oprType] = NULL;
 	}
 	m_index = NULL;
+
+	// speed up the calculation of denormal floating point values (flush-to-zero)
+	// must be called before ParaExec::init()
+	Denormal::Disable();
 
 	if (!m_numa_enable)
 	    ParaExec::init(m_numThreads, false, false);

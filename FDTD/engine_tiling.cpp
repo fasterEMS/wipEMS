@@ -17,7 +17,6 @@
  */
 
 #include "engine_tiling.h"
-#include "tools/denormal.h"
 #include "tools/tiling/tbb/paraexec.h"
 //#include "tools/tiling/tbb/first_touch.h"
 
@@ -38,9 +37,6 @@ Engine_Tiling::Engine_Tiling(const Operator_Tiling* op) : Engine(op)
 {
 	m_type = TILING_V1;
 	Op = op;
-
-	// speed up the calculation of denormal floating point values (flush-to-zero)
-	Denormal::Disable();
 }
 
 void Engine_Tiling::Init()
