@@ -52,7 +52,11 @@ public:
 	inline virtual float
 	GetVolt(uint32_t n, const uint32_t pos[3]) const override
 	{
-		return GetVolt(n, pos[0], pos[1], pos[2]);
+		ArrayLib::ArrayNIJK<Simd<float, veclen>, size_t>& volt_v = *m_volt_v;
+
+		uint32_t vk = pos[2] / veclen;
+		uint32_t vk_offset = pos[2] % veclen;
+		return volt_v(n, pos[0], pos[1], vk)[vk_offset];
 	}
 
 	inline virtual float
@@ -68,7 +72,11 @@ public:
 	inline virtual float
 	GetCurr(uint32_t n, const uint32_t pos[3]) const override
 	{
-		return GetCurr(n, pos[0], pos[1], pos[2]);
+		ArrayLib::ArrayNIJK<Simd<float, veclen>, size_t>& curr_v = *m_curr_v;
+
+		uint32_t vk = pos[2] / veclen;
+		uint32_t vk_offset = pos[2] % veclen;
+		return curr_v(n, pos[0], pos[1], vk)[vk_offset];
 	}
 
 	inline virtual void
@@ -84,7 +92,11 @@ public:
 	inline virtual void
 	SetVolt(uint32_t n, const uint32_t pos[3], float val) override
 	{
-		SetVolt(n, pos[0], pos[1], pos[2], val);
+		ArrayLib::ArrayNIJK<Simd<float, veclen>, size_t>& volt_v = *m_volt_v;
+
+		uint32_t vk = pos[2] / veclen;
+		uint32_t vk_offset = pos[2] % veclen;
+		volt_v(n, pos[0], pos[1], vk)[vk_offset] = val;
 	}
 
 	inline virtual void
