@@ -77,8 +77,8 @@ protected:
 	inline bool IsActive() {if (m_Eng->GetNumberOfTimesteps()<m_start_TS) return false; return true;}
 	unsigned int m_start_TS;
 
-	int m_ny;
-	int m_nyP,m_nyPP;
+	int m_dir1, m_dir2, m_dir3;
+
 	unsigned int m_LineNr;
 	int m_LineNr_Shift;
 	unsigned int m_numLines[2];
@@ -86,10 +86,10 @@ protected:
 	vector<unsigned int> m_start;
 	vector<unsigned int> m_numX;
 
-	ArrayLib::ArrayIJ<FDTD_FLOAT>& m_Mur_Coeff_nyP;
-	ArrayLib::ArrayIJ<FDTD_FLOAT>& m_Mur_Coeff_nyPP;
-	ArrayLib::ArrayIJ<FDTD_FLOAT> m_volt_nyP; //n+1 direction
-	ArrayLib::ArrayIJ<FDTD_FLOAT> m_volt_nyPP; //n+2 direction
+	ArrayLib::ArrayIJ<FDTD_FLOAT>& m_Mur_Coeff_dir2;
+	ArrayLib::ArrayIJ<FDTD_FLOAT>& m_Mur_Coeff_dir3;
+	ArrayLib::ArrayIJ<FDTD_FLOAT> m_volt_dir2; //n+1 direction
+	ArrayLib::ArrayIJ<FDTD_FLOAT> m_volt_dir3; //n+2 direction
 
 private:
 	void InitializeTilingImpl(Tiling::Range3D<> range);
