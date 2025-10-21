@@ -129,6 +129,11 @@ find_package(Boost 1.46 COMPONENTS
   program_options
   REQUIRED
 )
+if (${Boost_VERSION_MINOR} LESS 69)
+    # Since Boost 1.69, "system" is header only, so a check
+    # is needed only in Boost 1.68 and earlier.
+    find_package(Boost 1.46 COMPONENTS system REQUIRED)
+endif()
 message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
 message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 INCLUDE_DIRECTORIES (${Boost_INCLUDE_DIRS})
